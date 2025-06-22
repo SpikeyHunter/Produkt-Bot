@@ -30,7 +30,10 @@ Type *help* to explore what you can do!`,
 
     registrationError: `❌ *Incorrect Password* 
 
-The password you entered is not valid. Please try again, or type *cancel* to stop the registration process.`,
+The password you entered is not valid. Please try again, or type *cancel* to stop the registration process.
+
+Contact the BOT admin if you didn't receive your registration code.
+ProduktBot Admin - Charles Brousseau`,
 
     registrationFailed: `⚠️ *Registration Failed* 
 
