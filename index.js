@@ -18,14 +18,23 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 let registrationState = {};
 
 app.get('/webhook', (req, res) => {
-  if (
-    req.query['hub.mode'] === 'subscribe' &&
-    req.query['hub.verify_token'] === VERIFY_TOKEN
-  ) {
-    return res.send(req.query['hub.challenge']);
+  const VERIFY_TOKEN = 'produktbot_verify';
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode && token) {
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log('[Webhook Verified]');
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  } else {
+    res.sendStatus(400);
   }
-  res.sendStatus(403);
 });
+
 
 async function sendMessage(to, text) {
   await axios.post(
