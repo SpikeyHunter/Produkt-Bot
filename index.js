@@ -4,11 +4,11 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 
-// Import utilities - UPDATED to include typing functions
+// Import utilities - UPDATED with fuzzy matching
 const { 
   validateEnvironmentVariables, 
-  parseCommand, 
-  logIncomingMessageWithTyping,  // Using the typing version
+  parseCommandWithSuggestions,  // NEW: Enhanced parser
+  logIncomingMessageWithTyping,
   sendMessage 
 } = require('./utils');
 
@@ -80,7 +80,7 @@ app.post('/webhook', async (req, res) => {
 
     const from = message.from;
     const text = message.text?.body?.trim();
-    const messageId = message.id; // IMPORTANT: Get message ID for typing
+    const messageId = message.id;
     
     if (!text) return res.sendStatus(200);
 
@@ -97,10 +97,13 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // UPDATED: Use typing-enabled logging with message ID
     logIncomingMessageWithTyping(from, text, user, messageId);
 
-    const command = parseCommand(text);
+    // NEW: Enhanced command parsing with suggestions
+    const commandResult = parseCommandWithSuggestions(text, user);
+    const command = commandResult.command;
+    const suggestion = commandResult.suggestion;
+
     const isRegistering = registrationState[from];
     const isConfirming = confirmationState[from];
 
@@ -141,43 +144,55 @@ Type *help* to see available commands.`);
       return res.sendStatus(200);
     }
 
-    // Parse admin commands with parameters
-    const textParts = text.toLowerCase().trim().split(' ');
-    const baseCommand = textParts[0];
-    const parameter = textParts.slice(1).join(' ');
+    // If we have a valid command, execute it
+    if (command) {
+      // Parse admin commands with parameters
+      const textParts = text.toLowerCase().trim().split(' ');
+      const baseCommand = textParts[0];
+      const parameter = textParts.slice(1).join(' ');
 
-    switch (baseCommand) {
-      case 'help':
-        await handleHelp(from, user);
-        break;
+      switch (command) {
+        case 'help':
+          await handleHelp(from, user);
+          break;
 
-      case 'status':
-        await handleStatus(from, user, parameter, supabase);
-        break;
+        case 'status':
+          await handleStatus(from, user, parameter, supabase);
+          break;
 
-      case 'unregister':
-        if (user.bot_userrole === 'ADMIN' && parameter) {
-          // Admin unregistering another user
-          confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, parameter);
-        } else {
-          // User unregistering themselves
-          confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
-        }
-        break;
+        case 'unregister':
+          if (user.bot_userrole === 'ADMIN' && parameter) {
+            // Admin unregistering another user
+            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, parameter);
+          } else {
+            // User unregistering themselves
+            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
+          }
+          break;
 
-      case 'list':
-        if (textParts[1] === 'users' && user.bot_userrole === 'ADMIN') {
-          await handleListUsers(from, supabase);
-        } else {
-          await sendMessage(from, `❓ *Unknown Command*
+        case 'list':
+          if (textParts[1] === 'users' && user.bot_userrole === 'ADMIN') {
+            await handleListUsers(from, supabase);
+          } else {
+            await sendMessage(from, `❓ *Unknown Command*
 
 I don't recognize "${text}".
 Type *help* to see available commands.`);
-        }
-        break;
+          }
+          break;
 
-      default:
-        await sendMessage(from, `👋 Hello ${user.bot_username}!
+        default:
+          await sendMessage(from, `👋 Hello ${user.bot_username}!
+
+I don't recognize "${text}".
+Type *help* to see what I can do for you.`);
+      }
+    } else if (suggestion && suggestion.message) {
+      // NEW: Send suggestion for typos
+      await sendMessage(from, suggestion.message);
+    } else {
+      // No command match and no good suggestion
+      await sendMessage(from, `👋 Hello ${user.bot_username}!
 
 I don't recognize "${text}".
 Type *help* to see what I can do for you.`);
