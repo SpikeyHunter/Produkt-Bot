@@ -4,8 +4,13 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 
-// Import utilities
-const { validateEnvironmentVariables, parseCommand, logIncomingMessage, sendMessage } = require('./utils');
+// Import utilities - UPDATED to include typing functions
+const { 
+  validateEnvironmentVariables, 
+  parseCommand, 
+  logIncomingMessageWithTyping,  // Using the typing version
+  sendMessage 
+} = require('./utils');
 
 // Import command handlers
 const handleRegister = require('./commands/register');
@@ -75,6 +80,8 @@ app.post('/webhook', async (req, res) => {
 
     const from = message.from;
     const text = message.text?.body?.trim();
+    const messageId = message.id; // IMPORTANT: Get message ID for typing
+    
     if (!text) return res.sendStatus(200);
 
     // Check if user exists in database
@@ -90,7 +97,8 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    logIncomingMessage(from, text, user);
+    // UPDATED: Use typing-enabled logging with message ID
+    logIncomingMessageWithTyping(from, text, user, messageId);
 
     const command = parseCommand(text);
     const isRegistering = registrationState[from];
