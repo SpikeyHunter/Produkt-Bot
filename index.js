@@ -2,11 +2,21 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 
+// Import our custom modules
+const { validateEnvironmentVariables, parseCommand, logIncomingMessage, sendMessage } = require('./utils');
+const {
+  handleRegistration,
+  handleHelp,
+  handleStatus,
+  handleUnregister,
+  handleUnknownCommand,
+  handleExistingUser
+} = require('./handlers');
+const messages = require('./messages');
+
 // --- Environment Variable Validation ---
-// Ensure all required environment variables are set before starting the app.
 const requiredEnvVars = [
   'SUPABASE_URL',
   'SUPABASE_KEY',
@@ -15,10 +25,8 @@ const requiredEnvVars = [
   'ADMIN_PASSWORD',
   'USER_PASSWORD',
 ];
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingVars.length > 0) {
-  throw new Error(`FATAL ERROR: Missing required environment variables: ${missingVars.join(', ')}`);
-}
+
+validateEnvironmentVariables(requiredEnvVars);
 
 // --- Constants and Global State ---
 const {
@@ -34,7 +42,7 @@ const VERIFY_TOKEN = 'produktbot_verify';
 const PORT = process.env.PORT || 3000;
 
 // In-memory state for registration flow.
-// NOTE: This will reset if the server restarts. For a more robust solution,
+// NOTE: This will reset if the server restarts. For production,
 // consider storing this state in your Supabase database.
 let registrationState = {};
 
@@ -43,39 +51,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const app = express();
 app.use(bodyParser.json());
 
-// --- Helper Functions ---
-
-/**
- * Sends a WhatsApp message using the Meta Graph API.
- * @param {string} to - The recipient's phone number.
- * @param {string} text - The message body to send.
- */
-async function sendMessage(to, text) {
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: to,
-        text: { body: text },
-      },
-      {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
-      }
-    );
-    console.log(`Message sent to ${to}: "${text}"`);
-  } catch (error) {
-    console.error('Error sending message:', error.response ? error.response.data : error.message);
-  }
-}
-
 // --- Express Routes ---
 
 /**
  * Root route for health checks and basic availability verification.
  */
 app.get('/', (req, res) => {
-  res.status(200).send('Produkt Bot server is running and healthy!');
+  res.status(200).json({
+    status: 'healthy',
+    message: 'Produkt Bot server is running and healthy!',
+    timestamp: new Date().toISOString()
+  });
 });
 
 /**
@@ -88,11 +74,11 @@ app.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('[SUCCESS] Webhook verified.');
+    console.log('✅ [SUCCESS] Webhook verified.');
     res.status(200).send(challenge);
   } else {
-    console.error('[FAILURE] Webhook verification failed. Token mismatch or missing parameters.');
-    res.sendStatus(403); // Forbidden
+    console.error('❌ [FAILURE] Webhook verification failed. Token mismatch or missing parameters.');
+    res.sendStatus(403);
   }
 });
 
@@ -104,7 +90,6 @@ app.post('/webhook', async (req, res) => {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!message) {
       // This can be a status update or other non-message event.
-      // Acknowledging with 200 is important.
       return res.sendStatus(200);
     }
 
@@ -112,7 +97,7 @@ app.post('/webhook', async (req, res) => {
     const text = message.text?.body?.trim();
     if (!text) return res.sendStatus(200); // Ignore non-text messages
 
-    // Check if the user is in the database
+    // Check if the user exists in the database
     let { data: user, error: userError } = await supabase
       .from('bot_users')
       .select('*')
@@ -120,68 +105,101 @@ app.post('/webhook', async (req, res) => {
       .maybeSingle();
 
     if (userError) {
-        console.error('Supabase error fetching user:', userError);
-        await sendMessage(from, "Sorry, I'm having trouble with my database. Please try again later.");
-        return res.sendStatus(200);
-    }
-    
-    // --- Registration Logic ---
-    const isRegistering = registrationState[from];
-    if (!user || text.toLowerCase() === 'register' || isRegistering) {
-      
-      if (!isRegistering) {
-        registrationState[from] = { step: 1 };
-        await sendMessage(from, "Welcome to Produkt BOT! To register, what name should I call you?");
-      } else if (isRegistering.step === 1) {
-        registrationState[from].username = text;
-        registrationState[from].step = 2;
-        await sendMessage(from, "Great. Now, please enter the registration password:");
-      } else if (isRegistering.step === 2) {
-        const password = text;
-        let role = '';
-
-        if (password === ADMIN_PASSWORD) role = 'ADMIN';
-        else if (password === USER_PASSWORD) role = 'USER';
-        else {
-          await sendMessage(from, "That password was incorrect. Please try again, or type 'cancel' to stop.");
-          return res.sendStatus(200);
-        }
-
-        const { error: insertError } = await supabase.from('bot_users').upsert({
-          bot_userphone: from,
-          bot_username: registrationState[from].username,
-          bot_userstatus: 'OPTIN',
-          bot_userrole: role,
-        }, { onConflict: 'bot_userphone' });
-        
-        if (insertError) {
-          console.error('Supabase error inserting/updating user:', insertError);
-          await sendMessage(from, "Sorry, I couldn't save your registration. Please try again later.");
-        } else {
-          await sendMessage(from, `Thank you, ${registrationState[from].username}! You are now registered as a ${role}.`);
-        }
-        delete registrationState[from]; // Clean up state
-      }
+      console.error('❌ Supabase error fetching user:', userError);
+      await sendMessage(from, messages.system.databaseError);
       return res.sendStatus(200);
     }
-    
-    // --- Command Logic for Registered Users ---
-    if (text.toLowerCase() === 'unregister') {
-      await supabase.from('bot_users').update({ bot_userstatus: 'OPTOUT' }).eq('bot_userphone', from);
-      await sendMessage(from, "You have been successfully unregistered. Send 'register' anytime to rejoin.");
-    } else {
-      // Default response for registered users
-      await sendMessage(from, `Hi ${user.bot_username}, you are already registered as a ${user.bot_userrole}.`);
+
+    // Log the incoming message for debugging
+    logIncomingMessage(from, text, user);
+
+    // Parse the command
+    const command = parseCommand(text);
+    const isRegistering = registrationState[from];
+
+    // --- Handle Registration Flow ---
+    if (!user || command === 'register' || isRegistering) {
+      registrationState = await handleRegistration(from, text, registrationState, supabase);
+      return res.sendStatus(200);
+    }
+
+    // --- Handle Commands for Registered Users ---
+    switch (command) {
+      case 'help':
+        await handleHelp(from, user);
+        break;
+
+      case 'status':
+        await handleStatus(from, user);
+        break;
+
+      case 'unregister':
+        await handleUnregister(from, supabase);
+        break;
+
+      case null:
+        // Not a recognized command, but user exists
+        if (text.length > 0) {
+          await handleUnknownCommand(from, text);
+        } else {
+          await handleExistingUser(from, user);
+        }
+        break;
+
+      default:
+        await handleUnknownCommand(from, command);
     }
 
     res.sendStatus(200);
   } catch (error) {
-    console.error('Error in POST /webhook:', error);
-    res.sendStatus(500); // Internal Server Error
+    console.error('❌ Error in POST /webhook:', error);
+    
+    // Try to send an error message to the user if we have their phone number
+    try {
+      const from = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+      if (from) {
+        await sendMessage(from, messages.system.generalError);
+      }
+    } catch (sendError) {
+      console.error('❌ Failed to send error message to user:', sendError);
+    }
+    
+    res.sendStatus(500);
+  }
+});
+
+// --- Additional API Routes (for future expansion) ---
+
+/**
+ * Get bot statistics (for admin dashboard)
+ */
+app.get('/api/stats', async (req, res) => {
+  try {
+    const { data: stats, error } = await supabase
+      .from('bot_users')
+      .select('bot_userrole, bot_userstatus')
+      .eq('bot_userstatus', 'OPTIN');
+
+    if (error) throw error;
+
+    const summary = {
+      total: stats.length,
+      admins: stats.filter(u => u.bot_userrole === 'ADMIN').length,
+      users: stats.filter(u => u.bot_userrole === 'USER').length,
+      timestamp: new Date().toISOString()
+    };
+
+    res.json(summary);
+  } catch (error) {
+    console.error('❌ Error fetching stats:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });
 
 // --- Server Startup ---
 app.listen(PORT, () => {
-  console.log(`Produkt Bot server is running on port ${PORT}`);
+  console.log(`🚀 Produkt Bot server is running on port ${PORT}`);
+  console.log(`📱 Webhook URL: https://your-domain.com/webhook`);
+  console.log(`📊 Stats URL: https://your-domain.com/api/stats`);
+  console.log(`✅ Server started successfully at ${new Date().toISOString()}`);
 });
