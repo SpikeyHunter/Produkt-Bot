@@ -78,9 +78,9 @@ async function sendMessage(to, text, typingDuration = null) {
   try {
     // Auto-calculate typing duration based on message length for natural feel
     if (typingDuration === null) {
-      const baseTime = 500; // Quick start
+      const baseTime = 400; // Quick start
       const words = text.split(" ").length;
-      const calculatedTime = Math.min(1200, baseTime + words * 40); // Max 1.2s
+      const calculatedTime = Math.min(800, baseTime + words * 40); // Max 1.2s
       typingDuration = calculatedTime;
     }
 
