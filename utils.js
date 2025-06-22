@@ -1,6 +1,6 @@
 // utils.js - Utility functions for the WhatsApp bot
 
-const axios = require('axios');
+const axios = require("axios");
 
 /**
  * Marks a message as read and shows typing indicator
@@ -8,25 +8,29 @@ const axios = require('axios');
  */
 async function markAsReadWithTyping(messageId) {
   const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
-  
+
   try {
     await axios.post(
       `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
       {
-        messaging_product: 'whatsapp',
-        status: 'read',
+        messaging_product: "whatsapp",
+        status: "read",
         message_id: messageId,
         typing_indicator: {
-          type: 'text'
-        }
+          type: "text",
+        },
       },
       {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
       }
     );
     console.log(`✅ Message ${messageId} marked as read with typing indicator`);
   } catch (error) {
-    console.log(`⚠️ Mark as read with typing failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
+    console.log(
+      `⚠️ Mark as read with typing failed (non-critical): ${
+        error.response?.data?.error?.message || error.message
+      }`
+    );
   }
 }
 
@@ -36,25 +40,29 @@ async function markAsReadWithTyping(messageId) {
  */
 async function sendTypingIndicator(messageId) {
   const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
-  
+
   try {
     await axios.post(
       `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
       {
-        messaging_product: 'whatsapp',
-        status: 'read',
+        messaging_product: "whatsapp",
+        status: "read",
         message_id: messageId,
         typing_indicator: {
-          type: 'text'
-        }
+          type: "text",
+        },
       },
       {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
       }
     );
     console.log(`💬 Typing indicator sent for message ${messageId}`);
   } catch (error) {
-    console.log(`⚠️ Typing indicator failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
+    console.log(
+      `⚠️ Typing indicator failed (non-critical): ${
+        error.response?.data?.error?.message || error.message
+      }`
+    );
   }
 }
 
@@ -66,39 +74,40 @@ async function sendTypingIndicator(messageId) {
  */
 async function sendMessage(to, text, typingDuration = null) {
   const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
-  
+
   try {
     // Auto-calculate typing duration based on message length for natural feel
     if (typingDuration === null) {
-      const baseTime = 800; // Minimum typing time
-      const wordsPerMinute = 150; // Simulated reading/typing speed
-      const words = text.split(' ').length;
-      const calculatedTime = Math.min(2500, baseTime + (words * 100)); // 100ms per word, max 2.5s
+      const baseTime = 500; // Quick start
+      const words = text.split(" ").length;
+      const calculatedTime = Math.min(1200, baseTime + words * 40); // Max 1.2s
       typingDuration = calculatedTime;
     }
 
     // Simulate typing delay (without sending indicator message)
     if (typingDuration > 0) {
-      await new Promise(resolve => setTimeout(resolve, typingDuration));
+      await new Promise((resolve) => setTimeout(resolve, typingDuration));
     }
-    
+
     // Send the actual message
     await axios.post(
       `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
       {
-        messaging_product: 'whatsapp',
+        messaging_product: "whatsapp",
         to: to,
         text: { body: text },
       },
       {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
       }
     );
-    
+
     console.log(`✅ Message sent to ${to} (after ${typingDuration}ms delay)`);
-    
   } catch (error) {
-    console.error('❌ Error sending message:', error.response ? error.response.data : error.message);
+    console.error(
+      "❌ Error sending message:",
+      error.response ? error.response.data : error.message
+    );
     throw error;
   }
 }
@@ -110,22 +119,25 @@ async function sendMessage(to, text, typingDuration = null) {
  */
 async function sendMessageInstant(to, text) {
   const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
-  
+
   try {
     await axios.post(
       `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
       {
-        messaging_product: 'whatsapp',
+        messaging_product: "whatsapp",
         to: to,
         text: { body: text },
       },
       {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
       }
     );
     console.log(`⚡ Instant message sent to ${to}`);
   } catch (error) {
-    console.error('❌ Error sending instant message:', error.response ? error.response.data : error.message);
+    console.error(
+      "❌ Error sending instant message:",
+      error.response ? error.response.data : error.message
+    );
     throw error;
   }
 }
@@ -146,11 +158,15 @@ async function sendMessageWithTyping(to, text, customTypingMs) {
  * @throws {Error} If any required variables are missing
  */
 function validateEnvironmentVariables(requiredVars) {
-  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
   if (missingVars.length > 0) {
-    throw new Error(`FATAL ERROR: Missing required environment variables: ${missingVars.join(', ')}`);
+    throw new Error(
+      `FATAL ERROR: Missing required environment variables: ${missingVars.join(
+        ", "
+      )}`
+    );
   }
-  console.log('✅ All required environment variables are present');
+  console.log("✅ All required environment variables are present");
 }
 
 /**
@@ -160,11 +176,20 @@ function validateEnvironmentVariables(requiredVars) {
  */
 function parseCommand(text) {
   if (!text) return null;
-  
+
   const normalizedText = text.toLowerCase().trim();
-  const validCommands = ['help', 'register', 'unregister', 'status', 'list', 'cancel', 'yes', 'no'];
-  
-  const firstWord = normalizedText.split(' ')[0];
+  const validCommands = [
+    "help",
+    "register",
+    "unregister",
+    "status",
+    "list",
+    "cancel",
+    "yes",
+    "no",
+  ];
+
+  const firstWord = normalizedText.split(" ")[0];
   return validCommands.includes(firstWord) ? firstWord : null;
 }
 
@@ -176,8 +201,12 @@ function parseCommand(text) {
  */
 function logIncomingMessage(from, text, user = null) {
   const timestamp = new Date().toISOString();
-  const userInfo = user ? `${user.bot_username} (${user.bot_userrole})` : 'Unknown User';
-  console.log(`📨 [${timestamp}] Message from ${from} (${userInfo}): "${text}"`);
+  const userInfo = user
+    ? `${user.bot_username} (${user.bot_userrole})`
+    : "Unknown User";
+  console.log(
+    `📨 [${timestamp}] Message from ${from} (${userInfo}): "${text}"`
+  );
 }
 
 /**
@@ -187,11 +216,20 @@ function logIncomingMessage(from, text, user = null) {
  * @param {object} user - User data if available
  * @param {string} messageId - Message ID for read receipts and typing
  */
-function logIncomingMessageWithTyping(from, text, user = null, messageId = null) {
+function logIncomingMessageWithTyping(
+  from,
+  text,
+  user = null,
+  messageId = null
+) {
   const timestamp = new Date().toISOString();
-  const userInfo = user ? `${user.bot_username} (${user.bot_userrole})` : 'Unknown User';
-  console.log(`📨 [${timestamp}] Message from ${from} (${userInfo}): "${text}"`);
-  
+  const userInfo = user
+    ? `${user.bot_username} (${user.bot_userrole})`
+    : "Unknown User";
+  console.log(
+    `📨 [${timestamp}] Message from ${from} (${userInfo}): "${text}"`
+  );
+
   // Automatically mark message as read and show typing indicator
   if (messageId) {
     markAsReadWithTyping(messageId);
@@ -204,11 +242,11 @@ function logIncomingMessageWithTyping(from, text, user = null, messageId = null)
  * @returns {string} Sanitized input
  */
 function sanitizeInput(input) {
-  if (!input || typeof input !== 'string') return '';
-  
+  if (!input || typeof input !== "string") return "";
+
   return input
     .trim()
-    .replace(/[^\w\s\-@.]/g, '') // Remove special characters except basic ones
+    .replace(/[^\w\s\-@.]/g, "") // Remove special characters except basic ones
     .substring(0, 100); // Limit length
 }
 
@@ -218,33 +256,35 @@ function sanitizeInput(input) {
  * @returns {string} Formatted phone number
  */
 function formatPhoneNumber(phoneNumber) {
-  if (!phoneNumber) return '';
-  
-  const digits = phoneNumber.toString().replace(/\D/g, '');
-  
+  if (!phoneNumber) return "";
+
+  const digits = phoneNumber.toString().replace(/\D/g, "");
+
   // Format as +1 (555) 123-4567 for North American numbers
-  if (digits.length === 11 && digits.startsWith('1')) {
-    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(
+      7
+    )}`;
   }
-  
+
   // For other numbers, just add + and group digits
   if (digits.length > 10) {
     return `+${digits}`;
   }
-  
+
   return digits;
 }
 
 module.exports = {
-  sendMessage,                    // Main function with auto-delay
-  sendMessageInstant,            // No delay
-  sendMessageWithTyping,         // Custom delay duration
-  sendTypingIndicator,           // Official typing indicator
-  markAsReadWithTyping,          // Mark as read + typing
-  logIncomingMessageWithTyping,  // Enhanced logging with typing
+  sendMessage, // Main function with auto-delay
+  sendMessageInstant, // No delay
+  sendMessageWithTyping, // Custom delay duration
+  sendTypingIndicator, // Official typing indicator
+  markAsReadWithTyping, // Mark as read + typing
+  logIncomingMessageWithTyping, // Enhanced logging with typing
   validateEnvironmentVariables,
   parseCommand,
   logIncomingMessage,
   sanitizeInput,
-  formatPhoneNumber
+  formatPhoneNumber,
 };
