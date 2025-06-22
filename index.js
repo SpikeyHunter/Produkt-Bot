@@ -220,3 +220,8 @@ app.listen(PORT, () => {
   console.log(`🚀 Produkt Bot server is running on port ${PORT}`);
   console.log(`✅ Server started successfully at ${new Date().toISOString()}`);
 });
+
+// --- Keep-Alive (Prevent Render Sleep) ---
+setInterval(() => {
+  console.log('🔄 Keep-alive ping -', new Date().toISOString());
+}, 13 * 60 * 1000); // Every 13 minutes
