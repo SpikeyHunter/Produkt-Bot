@@ -17,6 +17,10 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 let registrationState = {};
 
+app.get('/', (req, res) => {
+  res.status(200).send('Produkt Bot is running!');
+});
+
 app.get('/webhook', (req, res) => {
   const VERIFY_TOKEN = 'produktbot_verify';
   const mode = req.query['hub.mode'];
@@ -34,7 +38,6 @@ app.get('/webhook', (req, res) => {
     res.sendStatus(400);
   }
 });
-
 
 async function sendMessage(to, text) {
   await axios.post(
