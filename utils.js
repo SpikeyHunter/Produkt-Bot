@@ -3,37 +3,10 @@
 const axios = require('axios');
 
 /**
- * Sends a typing indicator to WhatsApp
- * @param {string} to - The recipient's phone number
- * @param {string} action - 'typing_on' or 'typing_off'
- */
-async function sendTypingIndicator(to, action = 'typing_on') {
-  const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
-  
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: to,
-        type: action
-      },
-      {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
-      }
-    );
-    console.log(`💬 Typing indicator (${action}) sent to ${to}`);
-  } catch (error) {
-    // Don't throw error for typing indicators - just log and continue
-    console.log(`⚠️ Typing indicator failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
-  }
-}
-
-/**
- * Marks a message as read
+ * Marks a message as read and shows typing indicator
  * @param {string} messageId - The message ID to mark as read
  */
-async function markAsRead(messageId) {
+async function markAsReadWithTyping(messageId) {
   const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
   
   try {
@@ -42,20 +15,51 @@ async function markAsRead(messageId) {
       {
         messaging_product: 'whatsapp',
         status: 'read',
-        message_id: messageId
+        message_id: messageId,
+        typing_indicator: {
+          type: 'text'
+        }
       },
       {
         headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
       }
     );
-    console.log(`✅ Message ${messageId} marked as read`);
+    console.log(`✅ Message ${messageId} marked as read with typing indicator`);
   } catch (error) {
-    console.log(`⚠️ Mark as read failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
+    console.log(`⚠️ Mark as read with typing failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
   }
 }
 
 /**
- * Sends a WhatsApp message with typing indicator for natural feel
+ * Sends a typing indicator using the official WhatsApp API method
+ * @param {string} messageId - The message ID that triggered the response
+ */
+async function sendTypingIndicator(messageId) {
+  const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
+  
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        typing_indicator: {
+          type: 'text'
+        }
+      },
+      {
+        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+      }
+    );
+    console.log(`💬 Typing indicator sent for message ${messageId}`);
+  } catch (error) {
+    console.log(`⚠️ Typing indicator failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
+  }
+}
+
+/**
+ * Sends a WhatsApp message with natural delay for typing simulation
  * @param {string} to - The recipient's phone number
  * @param {string} text - The message body to send
  * @param {number} typingDuration - How long to show typing (milliseconds)
@@ -67,17 +71,16 @@ async function sendMessage(to, text, typingDuration = null) {
     // Auto-calculate typing duration based on message length for natural feel
     if (typingDuration === null) {
       const baseTime = 800; // Minimum typing time
-      const wordsPerMinute = 200; // Simulated typing speed
+      const wordsPerMinute = 150; // Simulated reading/typing speed
       const words = text.split(' ').length;
-      const calculatedTime = Math.min(3000, baseTime + (words / wordsPerMinute) * 60000);
+      const calculatedTime = Math.min(2500, baseTime + (words * 100)); // 100ms per word, max 2.5s
       typingDuration = calculatedTime;
     }
 
-    // Show typing indicator
-    await sendTypingIndicator(to, 'typing_on');
-    
-    // Wait to simulate natural typing/thinking
-    await new Promise(resolve => setTimeout(resolve, typingDuration));
+    // Simulate typing delay (without sending indicator message)
+    if (typingDuration > 0) {
+      await new Promise(resolve => setTimeout(resolve, typingDuration));
+    }
     
     // Send the actual message
     await axios.post(
@@ -92,10 +95,7 @@ async function sendMessage(to, text, typingDuration = null) {
       }
     );
     
-    console.log(`✅ Message sent to ${to} (after ${typingDuration}ms typing)`);
-    
-    // Turn off typing indicator (optional - usually auto-stops after message)
-    await sendTypingIndicator(to, 'typing_off');
+    console.log(`✅ Message sent to ${to} (after ${typingDuration}ms delay)`);
     
   } catch (error) {
     console.error('❌ Error sending message:', error.response ? error.response.data : error.message);
@@ -181,18 +181,20 @@ function logIncomingMessage(from, text, user = null) {
 }
 
 /**
- * Enhanced logging for incoming messages with auto-read functionality
+ * Enhanced logging for incoming messages with auto-read and typing
  * @param {string} from - Phone number of sender
  * @param {string} text - Message text
  * @param {object} user - User data if available
- * @param {string} messageId - Message ID for read receipts
+ * @param {string} messageId - Message ID for read receipts and typing
  */
-function logIncomingMessageWithRead(from, text, user = null, messageId = null) {
-  logIncomingMessage(from, text, user);
+function logIncomingMessageWithTyping(from, text, user = null, messageId = null) {
+  const timestamp = new Date().toISOString();
+  const userInfo = user ? `${user.bot_username} (${user.bot_userrole})` : 'Unknown User';
+  console.log(`📨 [${timestamp}] Message from ${from} (${userInfo}): "${text}"`);
   
-  // Automatically mark message as read for better UX
+  // Automatically mark message as read and show typing indicator
   if (messageId) {
-    markAsRead(messageId);
+    markAsReadWithTyping(messageId);
   }
 }
 
@@ -234,15 +236,15 @@ function formatPhoneNumber(phoneNumber) {
 }
 
 module.exports = {
-  sendMessage,                    // Main function with auto-typing
-  sendMessageInstant,            // No typing indicator
-  sendMessageWithTyping,         // Custom typing duration
-  sendTypingIndicator,           // Manual typing control
-  markAsRead,                    // Mark messages as read
+  sendMessage,                    // Main function with auto-delay
+  sendMessageInstant,            // No delay
+  sendMessageWithTyping,         // Custom delay duration
+  sendTypingIndicator,           // Official typing indicator
+  markAsReadWithTyping,          // Mark as read + typing
+  logIncomingMessageWithTyping,  // Enhanced logging with typing
   validateEnvironmentVariables,
   parseCommand,
   logIncomingMessage,
-  logIncomingMessageWithRead,    // Auto-read version
   sanitizeInput,
   formatPhoneNumber
 };
