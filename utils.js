@@ -25,7 +25,7 @@ async function sendMessage(to, text) {
     console.log(`✅ Message sent to ${to}`);
   } catch (error) {
     console.error('❌ Error sending message:', error.response ? error.response.data : error.message);
-    throw error; // Re-throw to allow error handling upstream
+    throw error;
   }
 }
 
@@ -51,9 +51,10 @@ function parseCommand(text) {
   if (!text) return null;
   
   const normalizedText = text.toLowerCase().trim();
-  const validCommands = ['help', 'register', 'unregister', 'status', 'cancel'];
+  const validCommands = ['help', 'register', 'unregister', 'status', 'list', 'cancel', 'yes', 'no'];
   
-  return validCommands.includes(normalizedText) ? normalizedText : null;
+  const firstWord = normalizedText.split(' ')[0];
+  return validCommands.includes(firstWord) ? firstWord : null;
 }
 
 /**
@@ -83,15 +84,26 @@ function sanitizeInput(input) {
 }
 
 /**
- * Formats phone numbers for consistency
+ * Formats phone numbers for display
  * @param {string} phoneNumber - Raw phone number
  * @returns {string} Formatted phone number
  */
 function formatPhoneNumber(phoneNumber) {
   if (!phoneNumber) return '';
   
-  // Remove any non-digit characters and ensure it's a string
-  return phoneNumber.toString().replace(/\D/g, '');
+  const digits = phoneNumber.toString().replace(/\D/g, '');
+  
+  // Format as +1 (555) 123-4567 for North American numbers
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  
+  // For other numbers, just add + and group digits
+  if (digits.length > 10) {
+    return `+${digits}`;
+  }
+  
+  return digits;
 }
 
 module.exports = {

@@ -4,17 +4,15 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 
-// Import our custom modules
+// Import utilities
 const { validateEnvironmentVariables, parseCommand, logIncomingMessage, sendMessage } = require('./utils');
-const {
-  handleRegistration,
-  handleHelp,
-  handleStatus,
-  handleUnregister,
-  handleUnknownCommand,
-  handleExistingUser
-} = require('./handlers');
-const messages = require('./messages');
+
+// Import command handlers
+const handleRegister = require('./commands/register');
+const handleHelp = require('./commands/help');
+const handleStatus = require('./commands/status');
+const handleUnregister = require('./commands/unregister');
+const handleListUsers = require('./commands/listUsers');
 
 // --- Environment Variable Validation ---
 const requiredEnvVars = [
@@ -32,19 +30,14 @@ validateEnvironmentVariables(requiredEnvVars);
 const {
   SUPABASE_URL,
   SUPABASE_KEY,
-  WHATSAPP_TOKEN,
-  PHONE_NUMBER_ID,
-  ADMIN_PASSWORD,
-  USER_PASSWORD,
 } = process.env;
 
 const VERIFY_TOKEN = 'produktbot_verify';
 const PORT = process.env.PORT || 3000;
 
-// In-memory state for registration flow.
-// NOTE: This will reset if the server restarts. For production,
-// consider storing this state in your Supabase database.
+// In-memory state for registration flow and confirmations.
 let registrationState = {};
+let confirmationState = {};
 
 // --- Service Clients ---
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -53,9 +46,6 @@ app.use(bodyParser.json());
 
 // --- Express Routes ---
 
-/**
- * Root route for health checks and basic availability verification.
- */
 app.get('/', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -64,10 +54,6 @@ app.get('/', (req, res) => {
   });
 });
 
-/**
- * Webhook verification route for Meta.
- * Handles the initial challenge request from the WhatsApp Cloud API setup.
- */
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -77,27 +63,21 @@ app.get('/webhook', (req, res) => {
     console.log('✅ [SUCCESS] Webhook verified.');
     res.status(200).send(challenge);
   } else {
-    console.error('❌ [FAILURE] Webhook verification failed. Token mismatch or missing parameters.');
+    console.error('❌ [FAILURE] Webhook verification failed.');
     res.sendStatus(403);
   }
 });
 
-/**
- * Main webhook route for receiving incoming WhatsApp messages.
- */
 app.post('/webhook', async (req, res) => {
   try {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (!message) {
-      // This can be a status update or other non-message event.
-      return res.sendStatus(200);
-    }
+    if (!message) return res.sendStatus(200);
 
     const from = message.from;
     const text = message.text?.body?.trim();
-    if (!text) return res.sendStatus(200); // Ignore non-text messages
+    if (!text) return res.sendStatus(200);
 
-    // Check if the user exists in the database
+    // Check if user exists in database
     let { data: user, error: userError } = await supabase
       .from('bot_users')
       .select('*')
@@ -106,79 +86,118 @@ app.post('/webhook', async (req, res) => {
 
     if (userError) {
       console.error('❌ Supabase error fetching user:', userError);
-      await sendMessage(from, messages.system.databaseError);
+      await sendMessage(from, "⚠️ Technical issue. Please try again later.");
       return res.sendStatus(200);
     }
 
-    // Log the incoming message for debugging
     logIncomingMessage(from, text, user);
 
-    // Parse the command
     const command = parseCommand(text);
     const isRegistering = registrationState[from];
+    const isConfirming = confirmationState[from];
 
     // --- Handle Registration Flow ---
-    if (!user || command === 'register' || isRegistering) {
-      registrationState = await handleRegistration(from, text, registrationState, supabase);
+    if ((!user && !isRegistering) || command === 'register') {
+      if (user && command === 'register') {
+        // User already registered, prevent re-registration
+        await sendMessage(from, `❌ *Already Registered*
+
+You're already registered as *${user.bot_username}* (${user.bot_userrole}).
+
+Type *help* to see available commands.`);
+        return res.sendStatus(200);
+      }
+      
+      registrationState = await handleRegister(from, text, registrationState, supabase);
       return res.sendStatus(200);
+    }
+
+    // Handle registration in progress
+    if (isRegistering) {
+      registrationState = await handleRegister(from, text, registrationState, supabase);
+      return res.sendStatus(200);
+    }
+
+    // Handle confirmation states
+    if (isConfirming) {
+      if (isConfirming.action === 'unregister') {
+        confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
+        return res.sendStatus(200);
+      }
     }
 
     // --- Handle Commands for Registered Users ---
-    switch (command) {
+    if (!user) {
+      // Unregistered user - start registration
+      registrationState = await handleRegister(from, text, registrationState, supabase);
+      return res.sendStatus(200);
+    }
+
+    // Parse admin commands with parameters
+    const textParts = text.toLowerCase().trim().split(' ');
+    const baseCommand = textParts[0];
+    const parameter = textParts.slice(1).join(' ');
+
+    switch (baseCommand) {
       case 'help':
         await handleHelp(from, user);
         break;
 
       case 'status':
-        await handleStatus(from, user);
+        await handleStatus(from, user, parameter, supabase);
         break;
 
       case 'unregister':
-        await handleUnregister(from, supabase);
+        if (user.bot_userrole === 'ADMIN' && parameter) {
+          // Admin unregistering another user
+          confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, parameter);
+        } else {
+          // User unregistering themselves
+          confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
+        }
         break;
 
-      case null:
-        // Not a recognized command, but user exists
-        if (text.length > 0) {
-          await handleUnknownCommand(from, text);
+      case 'list':
+        if (textParts[1] === 'users' && user.bot_userrole === 'ADMIN') {
+          await handleListUsers(from, supabase);
         } else {
-          await handleExistingUser(from, user);
+          await sendMessage(from, `❓ *Unknown Command*
+
+I don't recognize "${text}".
+Type *help* to see available commands.`);
         }
         break;
 
       default:
-        await handleUnknownCommand(from, command);
+        await sendMessage(from, `👋 Hello ${user.bot_username}!
+
+I don't recognize "${text}".
+Type *help* to see what I can do for you.`);
     }
 
     res.sendStatus(200);
   } catch (error) {
     console.error('❌ Error in POST /webhook:', error);
     
-    // Try to send an error message to the user if we have their phone number
     try {
       const from = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
       if (from) {
-        await sendMessage(from, messages.system.generalError);
+        await sendMessage(from, "😅 Something went wrong. Please try again!");
       }
     } catch (sendError) {
-      console.error('❌ Failed to send error message to user:', sendError);
+      console.error('❌ Failed to send error message:', sendError);
     }
     
     res.sendStatus(500);
   }
 });
 
-// --- Additional API Routes (for future expansion) ---
-
-/**
- * Get bot statistics (for admin dashboard)
- */
+// --- Stats API ---
 app.get('/api/stats', async (req, res) => {
   try {
     const { data: stats, error } = await supabase
       .from('bot_users')
-      .select('bot_userrole, bot_userstatus')
-      .eq('bot_userstatus', 'OPTIN');
+      .select('bot_userrole');
 
     if (error) throw error;
 
@@ -199,7 +218,5 @@ app.get('/api/stats', async (req, res) => {
 // --- Server Startup ---
 app.listen(PORT, () => {
   console.log(`🚀 Produkt Bot server is running on port ${PORT}`);
-  console.log(`📱 Webhook URL: https://your-domain.com/webhook`);
-  console.log(`📊 Stats URL: https://your-domain.com/api/stats`);
   console.log(`✅ Server started successfully at ${new Date().toISOString()}`);
 });
