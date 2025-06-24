@@ -1,7 +1,7 @@
 const { exec } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
 
-// This should be the same Supabase client from your index.js
+// UPDATED: Use the SUPABASE_KEY to match the Render environment
 const { SUPABASE_URL, SUPABASE_KEY } = process.env;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -16,13 +16,18 @@ let lastOrderUpdateTime = null;
 function runScript(command) {
   return new Promise((resolve, reject) => {
     console.log(`🚀 Running script: ${command}`);
-    const process = exec(command, (error, stdout, stderr) => {
+    
+    const options = {
+        env: process.env
+    };
+
+    const childProcess = exec(command, options, (error, stdout, stderr) => {
       if (error) {
         console.error(`❌ Error executing ${command}:`, error);
         return reject(error);
       }
       if (stderr) {
-        console.error(`stderr from ${command}:`, stderr);
+        console.warn(`stderr from ${command}:`, stderr);
       }
       console.log(`stdout from ${command}:`, stdout);
       resolve();
@@ -44,12 +49,8 @@ async function manageEventSync() {
       .limit(1)
       .single();
 
-    if (error) {
-      if (error.code !== 'PGRST116') { // Ignore 'No rows found' error
-          console.error('❌ Supabase error fetching last event_updated:', error);
-      }
-      // Decide if you want to proceed or stop if this fails
-      // For now, we'll proceed and assume a sync is needed.
+    if (error && error.code !== 'PGRST116') { // Ignore 'No rows found' error
+        console.error('❌ Supabase error fetching last event_updated:', error);
     }
 
     const lastSyncTime = data ? new Date(data.event_updated) : null;
@@ -58,7 +59,7 @@ async function manageEventSync() {
     // 2. Run event-sync.js if it's been more than 12 hours
     if (!lastSyncTime || lastSyncTime < twelveHoursAgo) {
       console.log('⏰ Last sync was more than 12 hours ago or never happened. Running event-sync.js...');
-      await runScript('node event-sync.js all');
+      runScript('node event-sync.js all').catch(err => console.error("Background event-sync.js failed:", err));
     } else {
       console.log('✅ Event sync is up-to-date (less than 12 hours).');
     }
@@ -67,7 +68,7 @@ async function manageEventSync() {
     const fifteenMinutes = 15 * 60 * 1000;
     if (!lastOrderUpdateTime || (Date.now() - lastOrderUpdateTime > fifteenMinutes)) {
         console.log('🔄 Running event-orders.js update...');
-        await runScript('node event-orders.js update');
+        runScript('node event-orders.js update').catch(err => console.error("Background event-orders.js failed:", err));
         lastOrderUpdateTime = Date.now();
     } else {
         console.log('✅ Event orders recently updated. Skipping.');
