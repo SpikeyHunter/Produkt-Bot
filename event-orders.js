@@ -14,8 +14,8 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Configuration from environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const GROUP_ID = process.env.TIXR_GROUP_ID || "980";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_KEY; 
+const GROUP_ID = process.env.TIXR_GROUP_ID || '980';
 const CPK = process.env.TIXR_CPK;
 const SECRET_KEY = process.env.TIXR_SECRET_KEY;
 
