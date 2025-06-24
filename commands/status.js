@@ -1,30 +1,29 @@
-// commands/status.js - ZERO hardcoded messages
+// commands/status.js - ACTUALLY working with variables
 const { sendMessage, formatPhoneNumber } = require('../utils');
 const templates = require('../templates/templateLoader');
 
 async function handleStatus(from, user, parameter = '', supabase) {
-  const statusTemplates = templates.get('status');
-  const generalTemplates = templates.get('general');
-
   if (!user) {
+    const statusTemplates = templates.get('status');
     await sendMessage(from, statusTemplates.unregistered);
     return;
   }
 
   // If no parameter, show user's own status
   if (!parameter) {
-    const statusMessage = templates.get('status', {
+    const statusTemplates = templates.get('status', {
       username: user.bot_username,
       role: user.bot_userrole,
       phone: formatPhoneNumber(user.bot_userphone)
-    }).userStatus;
+    });
     
-    await sendMessage(from, statusMessage);
+    await sendMessage(from, statusTemplates.userStatus);
     return;
   }
 
   // Parameter provided - admin checking another user
   if (user.bot_userrole !== 'ADMIN') {
+    const generalTemplates = templates.get('general');
     await sendMessage(from, generalTemplates.accessDenied);
     return;
   }
@@ -39,26 +38,28 @@ async function handleStatus(from, user, parameter = '', supabase) {
 
     if (error) {
       console.error('Error searching for user:', error);
+      const generalTemplates = templates.get('general');
       await sendMessage(from, generalTemplates.technicalIssue);
       return;
     }
 
     if (!targetUser) {
-      const userNotFoundMessage = templates.get('status', { username: parameter }).userNotFound;
-      await sendMessage(from, userNotFoundMessage);
+      const statusTemplates = templates.get('status', { username: parameter });
+      await sendMessage(from, statusTemplates.userNotFound);
       return;
     }
 
-    const statusMessage = templates.get('status', {
+    const statusTemplates = templates.get('status', {
       username: targetUser.bot_username,
       role: targetUser.bot_userrole,
       phone: formatPhoneNumber(targetUser.bot_userphone)
-    }).otherUserStatus;
+    });
 
-    await sendMessage(from, statusMessage);
+    await sendMessage(from, statusTemplates.otherUserStatus);
 
   } catch (error) {
     console.error('Status command error:', error);
+    const generalTemplates = templates.get('general');
     await sendMessage(from, generalTemplates.technicalIssue);
   }
 }

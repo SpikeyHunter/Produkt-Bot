@@ -1,4 +1,4 @@
-// commands/help.js - Updated to use templates
+// commands/help.js - Fixed to properly handle template variables
 const { sendMessage } = require('../utils');
 const templates = require('../templates/templateLoader');
 
@@ -10,14 +10,14 @@ async function handleHelp(from, user = null) {
       templateKey = user.bot_userrole === 'ADMIN' ? 'admin' : 'user';
     }
 
-    const helpMessages = templates.get('help');
-    const helpMessage = helpMessages[templateKey];
+    const helpTemplates = templates.get('help');
+    const helpMessage = helpTemplates[templateKey];
     
     await sendMessage(from, helpMessage);
   } catch (error) {
     console.error('Help command error:', error);
-    const errorMessage = templates.get('general').technicalIssue;
-    await sendMessage(from, errorMessage);
+    const generalTemplates = templates.get('general');
+    await sendMessage(from, generalTemplates.technicalIssue);
   }
 }
 

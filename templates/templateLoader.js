@@ -1,4 +1,4 @@
-// templates/templateLoader.js - Template management system
+// templates/templateLoader.js - Fixed variable replacement
 const fs = require('fs');
 const path = require('path');
 
@@ -48,7 +48,7 @@ class TemplateLoader {
   }
 
   /**
-   * Get a template by name
+   * Get a template by name with variable replacement
    */
   get(templateName, variables = {}) {
     const template = this.templates.get(templateName);
@@ -63,9 +63,17 @@ class TemplateLoader {
       return this.replaceVariables(template, variables);
     }
 
-    // If it's a JSON template, return the appropriate section
+    // If it's a JSON template, return object with variable replacement
     if (typeof template === 'object') {
-      return template;
+      const result = {};
+      for (const [key, value] of Object.entries(template)) {
+        if (typeof value === 'string') {
+          result[key] = this.replaceVariables(value, variables);
+        } else {
+          result[key] = value;
+        }
+      }
+      return result;
     }
 
     return template;
@@ -79,7 +87,7 @@ class TemplateLoader {
     
     for (const [key, value] of Object.entries(variables)) {
       const placeholder = new RegExp(`{{${key}}}`, 'g');
-      result = result.replace(placeholder, value);
+      result = result.replace(placeholder, value || '');
     }
     
     return result;

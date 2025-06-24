@@ -1,14 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
-import crypto from 'crypto';
+const { createClient } = require('@supabase/supabase-js');
+const axios = require('axios');
+const crypto = require('crypto');
 
 console.log('Event sync script starting...');
 
 // Load environment variables for local development
 if (process.env.NODE_ENV !== 'production') {
   try {
-    const dotenv = await import('dotenv');
-    dotenv.config();
+    require('dotenv').config();
   } catch (error) {
     console.log('dotenv not available, using system environment variables');
   }

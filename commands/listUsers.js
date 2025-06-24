@@ -1,10 +1,9 @@
-// commands/listUsers.js - ZERO hardcoded messages
+// commands/listUsers.js - Fixed to properly handle template variables
 const { sendMessage, formatPhoneNumber } = require('../utils');
 const templates = require('../templates/templateLoader');
 
 async function handleListUsers(from, supabase) {
   try {
-    const listUsersTemplates = templates.get('listUsers');
     const generalTemplates = templates.get('general');
     
     // Get all registered users
@@ -20,6 +19,7 @@ async function handleListUsers(from, supabase) {
     }
 
     if (!users || users.length === 0) {
+      const listUsersTemplates = templates.get('listUsers');
       await sendMessage(from, listUsersTemplates.noUsers);
       return;
     }
@@ -32,22 +32,22 @@ async function handleListUsers(from, supabase) {
       return a.bot_userrole === 'ADMIN' ? -1 : 1;
     });
 
-    // Build user list message using templates
-    const headerMessage = templates.get('listUsers', { count: sortedUsers.length }).header;
-    let message = headerMessage + '\n\n';
+    // Build user list message using templates with variables
+    const listUsersTemplates = templates.get('listUsers', { count: sortedUsers.length });
+    let message = listUsersTemplates.header + '\n\n';
     
     sortedUsers.forEach((user, index) => {
       const phoneFormatted = formatPhoneNumber(user.bot_userphone);
       const roleIcon = user.bot_userrole === 'ADMIN' ? '👨‍💼' : '👤';
       
-      const userEntry = templates.get('listUsers', {
+      const userEntryTemplate = templates.get('listUsers', {
         icon: roleIcon,
         username: user.bot_username,
         phone: phoneFormatted,
         role: user.bot_userrole
-      }).userEntry;
+      });
       
-      message += userEntry;
+      message += userEntryTemplate.userEntry;
       
       if (index < sortedUsers.length - 1) {
         message += '\n\n';

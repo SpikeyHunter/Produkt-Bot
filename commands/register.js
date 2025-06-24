@@ -1,4 +1,4 @@
-// commands/register.js - Updated to use templates and database script
+// commands/register.js - Fixed to properly handle template variables
 const { sendMessage } = require('../utils');
 const templates = require('../templates/templateLoader');
 const database = require('../scripts/database');
@@ -9,8 +9,8 @@ async function handleRegister(from, text, registrationState, supabase) {
   if (!registrationState[from]) {
     // Start registration process
     registrationState[from] = { step: 1 };
-    const welcomeMessage = templates.get('registration').welcome;
-    await sendMessage(from, welcomeMessage);
+    const registrationTemplates = templates.get('registration');
+    await sendMessage(from, registrationTemplates.welcome);
     return registrationState;
   }
 
@@ -18,15 +18,15 @@ async function handleRegister(from, text, registrationState, supabase) {
     // Handle name input
     if (text.toLowerCase() === 'cancel') {
       delete registrationState[from];
-      const cancelMessage = templates.get('registration').canceled;
-      await sendMessage(from, cancelMessage);
+      const registrationTemplates = templates.get('registration');
+      await sendMessage(from, registrationTemplates.canceled);
       return registrationState;
     }
 
     registrationState[from].username = text;
     registrationState[from].step = 2;
-    const step2Message = templates.get('registration', { name: text }).step2;
-    await sendMessage(from, step2Message);
+    const registrationTemplates = templates.get('registration', { name: text });
+    await sendMessage(from, registrationTemplates.step2);
     return registrationState;
   }
 
@@ -34,8 +34,8 @@ async function handleRegister(from, text, registrationState, supabase) {
     // Handle password input
     if (text.toLowerCase() === 'cancel') {
       delete registrationState[from];
-      const cancelMessage = templates.get('registration').canceled;
-      await sendMessage(from, cancelMessage);
+      const registrationTemplates = templates.get('registration');
+      await sendMessage(from, registrationTemplates.canceled);
       return registrationState;
     }
 
@@ -47,8 +47,8 @@ async function handleRegister(from, text, registrationState, supabase) {
     } else if (password === USER_PASSWORD) {
       role = 'USER';
     } else {
-      const wrongPasswordMessage = templates.get('registration').wrongPassword;
-      await sendMessage(from, wrongPasswordMessage);
+      const registrationTemplates = templates.get('registration');
+      await sendMessage(from, registrationTemplates.wrongPassword);
       return registrationState;
     }
 
@@ -61,19 +61,19 @@ async function handleRegister(from, text, registrationState, supabase) {
       );
       
       if (result.success) {
-        const successMessage = templates.get('registration', {
+        const registrationTemplates = templates.get('registration', {
           name: registrationState[from].username,
           role: role
-        }).success;
-        await sendMessage(from, successMessage);
+        });
+        await sendMessage(from, registrationTemplates.success);
       } else {
-        const failedMessage = templates.get('registration').failed;
-        await sendMessage(from, failedMessage);
+        const registrationTemplates = templates.get('registration');
+        await sendMessage(from, registrationTemplates.failed);
       }
     } catch (error) {
       console.error('Registration error:', error);
-      const failedMessage = templates.get('registration').failed;
-      await sendMessage(from, failedMessage);
+      const registrationTemplates = templates.get('registration');
+      await sendMessage(from, registrationTemplates.failed);
     }
 
     delete registrationState[from];

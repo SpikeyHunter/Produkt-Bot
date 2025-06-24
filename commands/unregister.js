@@ -1,10 +1,9 @@
-// commands/unregister.js - Fully templated unregister command
+// commands/unregister.js - Fixed to properly handle template variables
 const { sendMessage } = require('../utils');
 const templates = require('../templates/templateLoader');
 
 async function handleUnregister(from, text, confirmationState, supabase, user, targetUsername = '') {
   try {
-    const unregisterTemplates = templates.get('unregister');
     const generalTemplates = templates.get('general');
 
     // Check if user is in confirmation state
@@ -25,13 +24,14 @@ async function handleUnregister(from, text, confirmationState, supabase, user, t
         }
 
         if (!targetUser) {
-          const userNotFoundMessage = templates.get('unregister', { username: targetUsername }).userNotFound;
-          await sendMessage(from, userNotFoundMessage);
+          const unregisterTemplates = templates.get('unregister', { username: targetUsername });
+          await sendMessage(from, unregisterTemplates.userNotFound);
           return confirmationState;
         }
 
         // Prevent admin from deleting another admin
         if (targetUser.bot_userrole === 'ADMIN') {
+          const unregisterTemplates = templates.get('unregister');
           await sendMessage(from, unregisterTemplates.cannotDeleteAdmin);
           return confirmationState;
         }
@@ -43,8 +43,8 @@ async function handleUnregister(from, text, confirmationState, supabase, user, t
           timestamp: Date.now() 
         };
         
-        const confirmOtherMessage = templates.get('unregister', { username: targetUser.bot_username }).confirmOther;
-        await sendMessage(from, confirmOtherMessage);
+        const unregisterTemplates = templates.get('unregister', { username: targetUser.bot_username });
+        await sendMessage(from, unregisterTemplates.confirmOther);
         return confirmationState;
       }
       
@@ -61,6 +61,7 @@ async function handleUnregister(from, text, confirmationState, supabase, user, t
         timestamp: Date.now() 
       };
       
+      const unregisterTemplates = templates.get('unregister');
       await sendMessage(from, unregisterTemplates.confirmSelf);
       return confirmationState;
     }
@@ -83,26 +84,30 @@ async function handleUnregister(from, text, confirmationState, supabase, user, t
         await sendMessage(from, generalTemplates.technicalIssue);
       } else {
         if (isAdminDeletingOther) {
-          const successOtherMessage = templates.get('unregister', { username: userToDelete.bot_username }).successOther;
-          await sendMessage(from, successOtherMessage);
+          const unregisterTemplates = templates.get('unregister', { username: userToDelete.bot_username });
+          await sendMessage(from, unregisterTemplates.successOther);
         } else {
+          const unregisterTemplates = templates.get('unregister');
           await sendMessage(from, unregisterTemplates.successSelf);
         }
       }
       
       delete confirmationState[from];
     } else if (response === 'no' || response === 'cancel') {
+      const unregisterTemplates = templates.get('unregister');
       await sendMessage(from, unregisterTemplates.canceled);
       delete confirmationState[from];
     } else {
       // Invalid response
+      const unregisterTemplates = templates.get('unregister');
       await sendMessage(from, unregisterTemplates.invalidResponse);
     }
 
     return confirmationState;
   } catch (error) {
     console.error('Unregister error:', error);
-    await sendMessage(from, templates.get('general').technicalIssue);
+    const generalTemplates = templates.get('general');
+    await sendMessage(from, generalTemplates.technicalIssue);
     delete confirmationState[from];
     return confirmationState;
   }

@@ -1,4 +1,4 @@
-// commands/sales.js - ZERO hardcoded messages
+// commands/sales.js - Fixed to properly handle template variables
 const { sendMessage } = require('../utils');
 const { format, toDate } = require('date-fns');
 const { utcToZonedTime } = require('date-fns-tz');
@@ -6,7 +6,6 @@ const templates = require('../templates/templateLoader');
 
 async function listUpcomingEvents(from, supabase, showAll = false) {
     try {
-        const salesTemplates = templates.get('sales');
         const today = new Date();
         const todayInET = utcToZonedTime(today, 'America/New_York');
         const todayDateString = format(todayInET, 'yyyy-MM-dd');
@@ -25,18 +24,20 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
 
         if (error) {
             console.error("Error fetching upcoming events:", error);
+            const salesTemplates = templates.get('sales');
             await sendMessage(from, salesTemplates.fetchError);
             return null;
         }
 
         if (!events || events.length === 0) {
+            const salesTemplates = templates.get('sales');
             await sendMessage(from, salesTemplates.noUpcomingEvents);
             return [];
         }
 
-        // Build message using templates
-        const headerMessage = templates.get('sales', { count: events.length }).eventListHeader;
-        let message = headerMessage + '\n\n';
+        // Build message using templates with variables
+        const salesTemplates = templates.get('sales', { count: events.length });
+        let message = salesTemplates.eventListHeader + '\n\n';
         
         events.forEach(event => {
             const eventDate = toDate(new Date(event.event_date));
@@ -47,7 +48,8 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         });
         
         if (!showAll) {
-            message += salesTemplates.askForSelection;
+            const salesTemplatesForSelection = templates.get('sales');
+            message += salesTemplatesForSelection.askForSelection;
         }
 
         await sendMessage(from, message);
@@ -62,8 +64,6 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
 }
 
 async function showSalesReport(from, supabase, event) {
-    const salesTemplates = templates.get('sales');
-    
     const { data: salesData, error } = await supabase
         .from('events_sales')
         .select('*')
@@ -72,6 +72,7 @@ async function showSalesReport(from, supabase, event) {
 
     if (error || !salesData) {
         console.error("Error fetching sales data:", error);
+        const salesTemplates = templates.get('sales');
         await sendMessage(from, salesTemplates.noSalesData);
         return;
     }
@@ -82,37 +83,35 @@ async function showSalesReport(from, supabase, event) {
     const formattedDate = format(zonedDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
 
-    // Build report using templates
-    const reportHeader = templates.get('sales', {
+    // Build report using templates with variables
+    const reportHeaderTemplate = templates.get('sales', {
         eventId: event.event_id,
         date: formattedDate,
         name: eventName
-    }).salesReportHeader;
+    });
 
-    const totalSalesLine = templates.get('sales', { amount: grossSales }).totalSalesLine;
+    const totalSalesTemplate = templates.get('sales', { amount: grossSales });
     
-    const gaLine = templates.get('sales', { 
+    const gaTemplate = templates.get('sales', { 
         label: 'GA', 
         value: salesData.sales_total_ga || 'N/A' 
-    }).salesReportLine;
+    });
     
-    const vipLine = templates.get('sales', { 
+    const vipTemplate = templates.get('sales', { 
         label: 'VIP', 
         value: salesData.sales_total_vip || 'N/A' 
-    }).salesReportLine;
+    });
     
-    const coatcheckLine = templates.get('sales', { 
+    const coatcheckTemplate = templates.get('sales', { 
         label: 'Coatcheck', 
         value: salesData.sales_total_coatcheck || 'N/A' 
-    }).salesReportLine;
+    });
 
-    const report = `${reportHeader}\n\n${totalSalesLine}\n${gaLine}\n${vipLine}\n${coatcheckLine}`;
+    const report = `${reportHeaderTemplate.salesReportHeader}\n\n${totalSalesTemplate.totalSalesLine}\n${gaTemplate.salesReportLine}\n${vipTemplate.salesReportLine}\n${coatcheckTemplate.salesReportLine}`;
     await sendMessage(from, report);
 }
 
 async function handleSales(from, text, salesState, supabase, user) {
-    const salesTemplates = templates.get('sales');
-    
     if (!salesState[from]) {
         // Start of the flow
         const events = await listUpcomingEvents(from, supabase);
@@ -132,6 +131,7 @@ async function handleSales(from, text, salesState, supabase, user) {
         
         if(input === 'cancel'){
             delete salesState[from];
+            const salesTemplates = templates.get('sales');
             await sendMessage(from, salesTemplates.salesCanceled);
             return salesState;
         }
@@ -157,6 +157,7 @@ async function handleSales(from, text, salesState, supabase, user) {
             await showSalesReport(from, supabase, selectedEvent);
             delete salesState[from]; // End of flow
         } else {
+            const salesTemplates = templates.get('sales');
             await sendMessage(from, salesTemplates.selectionError);
         }
     }
