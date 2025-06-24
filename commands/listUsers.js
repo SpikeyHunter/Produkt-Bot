@@ -1,48 +1,7 @@
-// commands/listUsers.js - List users command handler
-
+// commands/listUsers.js - List users command handler with templates
 const { sendMessage, formatPhoneNumber } = require('../utils');
+const templates = require('../templates/templateLoader');
 
-// List users messages
-const MESSAGES = {
-  noUsers: `📋 *User List*
-
-No users are currently registered in the system.`,
-
-  userList: (users) => {
-    let message = `📋 *Registered Users (${users.length})*\n\n`;
-    
-    users.forEach((user, index) => {
-      const phoneFormatted = formatPhoneNumber(user.bot_userphone);
-      const roleIcon = user.bot_userrole === 'ADMIN' ? '👨‍💼' : '👤';
-      
-      message += `${roleIcon} *${user.bot_username}*\n`;
-      message += `   📱 ${phoneFormatted}\n`;
-      message += `   🏷️ ${user.bot_userrole}\n`;
-      
-      if (index < users.length - 1) {
-        message += '\n';
-      }
-    });
-    
-    return message;
-  },
-
-  accessDenied: `❌ *Access Denied*
-
-Only admins can view the user list.
-
-Type *help* to see your available commands.`,
-
-  error: `⚠️ *Error Loading Users*
-
-Unable to load the user list right now. Please try again later.`
-};
-
-/**
- * Handles list users command (admin only)
- * @param {string} from - User's phone number
- * @param {object} supabase - Supabase client
- */
 async function handleListUsers(from, supabase) {
   try {
     // Get all registered users
@@ -53,12 +12,16 @@ async function handleListUsers(from, supabase) {
 
     if (error) {
       console.error('Error fetching users:', error);
-      await sendMessage(from, MESSAGES.error);
+      await sendMessage(from, `⚠️ *Error Loading Users*
+
+Unable to load the user list right now. Please try again later.`);
       return;
     }
 
     if (!users || users.length === 0) {
-      await sendMessage(from, MESSAGES.noUsers);
+      await sendMessage(from, `📋 *User List*
+
+No users are currently registered in the system.`);
       return;
     }
 
@@ -70,12 +33,29 @@ async function handleListUsers(from, supabase) {
       return a.bot_userrole === 'ADMIN' ? -1 : 1;
     });
 
-    const userListMessage = MESSAGES.userList(sortedUsers);
-    await sendMessage(from, userListMessage);
+    // Build user list message
+    let message = `📋 *Registered Users (${sortedUsers.length})*\n\n`;
+    
+    sortedUsers.forEach((user, index) => {
+      const phoneFormatted = formatPhoneNumber(user.bot_userphone);
+      const roleIcon = user.bot_userrole === 'ADMIN' ? '👨‍💼' : '👤';
+      
+      message += `${roleIcon} *${user.bot_username}*\n`;
+      message += `   📱 ${phoneFormatted}\n`;
+      message += `   🏷️ ${user.bot_userrole}\n`;
+      
+      if (index < sortedUsers.length - 1) {
+        message += '\n';
+      }
+    });
+
+    await sendMessage(from, message);
 
   } catch (error) {
     console.error('List users error:', error);
-    await sendMessage(from, MESSAGES.error);
+    await sendMessage(from, `⚠️ *Error Loading Users*
+
+Unable to load the user list right now. Please try again later.`);
   }
 }
 

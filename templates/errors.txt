@@ -1,0 +1,5 @@
+⚠️ *Technical Issue*
+
+Something went wrong on our end. Please try again in a few moments.
+
+If this continues, contact support and mention error code: {{errorCode}}

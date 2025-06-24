@@ -1,56 +1,16 @@
-// commands/register.js - Registration command handler
-
+// commands/register.js - Updated to use templates and database script
 const { sendMessage } = require('../utils');
+const templates = require('../templates/templateLoader');
+const database = require('../scripts/database');
 
-// Messages for registration
-const MESSAGES = {
-  welcome: `🎉 *Welcome to Produkt BOT!* 
-
-I'm here to help you get started. Let's begin your registration process.
-
-📝 *Step 1 of 2*
-What name would you like me to call you?`,
-
-  step2: (name) => `✅ Nice to meet you, *${name}*! 
-
-📝 *Step 2 of 2*
-Please enter your registration password to complete the setup.`,
-
-  success: (name, role) => `🎉 *Registration Complete!* 
-
-Welcome aboard, *${name}*! 
-You're now registered as a *${role}*.
-
-Type *help* to explore what you can do!`,
-
-  wrongPassword: `❌ *Incorrect Password* 
-
-The password you entered is not valid. Please try again, or type *cancel* to stop the registration process.`,
-
-  failed: `⚠️ *Registration Failed* 
-
-Sorry, I couldn't save your registration due to a technical issue. Please try again later or contact support.`,
-
-  canceled: `❌ *Registration Canceled* 
-
-No worries! You can start the registration process anytime by typing *register*.`
-};
-
-/**
- * Handles the registration flow for new users
- * @param {string} from - User's phone number
- * @param {string} text - User's message text
- * @param {object} registrationState - Current registration state
- * @param {object} supabase - Supabase client
- * @returns {object} Updated registration state
- */
 async function handleRegister(from, text, registrationState, supabase) {
   const { ADMIN_PASSWORD, USER_PASSWORD } = process.env;
   
   if (!registrationState[from]) {
     // Start registration process
     registrationState[from] = { step: 1 };
-    await sendMessage(from, MESSAGES.welcome);
+    const welcomeMessage = templates.get('registration').welcome;
+    await sendMessage(from, welcomeMessage);
     return registrationState;
   }
 
@@ -58,13 +18,15 @@ async function handleRegister(from, text, registrationState, supabase) {
     // Handle name input
     if (text.toLowerCase() === 'cancel') {
       delete registrationState[from];
-      await sendMessage(from, MESSAGES.canceled);
+      const cancelMessage = templates.get('registration').canceled;
+      await sendMessage(from, cancelMessage);
       return registrationState;
     }
 
     registrationState[from].username = text;
     registrationState[from].step = 2;
-    await sendMessage(from, MESSAGES.step2(text));
+    const step2Message = templates.get('registration', { name: text }).step2;
+    await sendMessage(from, step2Message);
     return registrationState;
   }
 
@@ -72,7 +34,8 @@ async function handleRegister(from, text, registrationState, supabase) {
     // Handle password input
     if (text.toLowerCase() === 'cancel') {
       delete registrationState[from];
-      await sendMessage(from, MESSAGES.canceled);
+      const cancelMessage = templates.get('registration').canceled;
+      await sendMessage(from, cancelMessage);
       return registrationState;
     }
 
@@ -84,28 +47,33 @@ async function handleRegister(from, text, registrationState, supabase) {
     } else if (password === USER_PASSWORD) {
       role = 'USER';
     } else {
-      await sendMessage(from, MESSAGES.wrongPassword);
+      const wrongPasswordMessage = templates.get('registration').wrongPassword;
+      await sendMessage(from, wrongPasswordMessage);
       return registrationState;
     }
 
-    // Save to database
+    // Save to database using the database script
     try {
-      const { error: insertError } = await supabase.from('bot_users').upsert({
-        bot_userphone: from,
-        bot_username: registrationState[from].username,
-        bot_userstatus: 'OPTIN',
-        bot_userrole: role,
-      }, { onConflict: 'bot_userphone' });
+      const result = await database.registerUser(
+        from, 
+        registrationState[from].username, 
+        role
+      );
       
-      if (insertError) {
-        console.error('Supabase error inserting/updating user:', insertError);
-        await sendMessage(from, MESSAGES.failed);
+      if (result.success) {
+        const successMessage = templates.get('registration', {
+          name: registrationState[from].username,
+          role: role
+        }).success;
+        await sendMessage(from, successMessage);
       } else {
-        await sendMessage(from, MESSAGES.success(registrationState[from].username, role));
+        const failedMessage = templates.get('registration').failed;
+        await sendMessage(from, failedMessage);
       }
     } catch (error) {
       console.error('Registration error:', error);
-      await sendMessage(from, MESSAGES.failed);
+      const failedMessage = templates.get('registration').failed;
+      await sendMessage(from, failedMessage);
     }
 
     delete registrationState[from];

@@ -1,42 +1,9 @@
-// commands/sales.js
-
+// commands/sales.js - Sales command with templates
 const { sendMessage } = require('../utils');
 const { format, toDate } = require('date-fns');
 const { utcToZonedTime } = require('date-fns-tz');
+const templates = require('../templates/templateLoader');
 
-// Messages for the sales command
-const MESSAGES = {
-    fetchError: "⚠️ *Error*\n\nI couldn't fetch the event list right now. Please try again later.",
-    noUpcomingEvents: "- No upcoming events found.",
-    eventListHeader: (count) => `🎟️ *Upcoming Events* (${count})\n\nPlease select an event by typing its ID, Name, or Date.`,
-    eventEntry: (event) => {
-        const eventDate = toDate(new Date(event.event_date));
-        // We need to account for the fact that the date in Supabase might be without timezone
-        const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
-        const formattedDate = format(zonedDate, 'MMMM d');
-        const eventName = event.event_name.split(',')[0];
-        return `${event.event_id} - ${formattedDate} - ${eventName}`;
-    },
-    askForSelection: "\nType *All* to see all upcoming events.",
-    selectionError: "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list, or type *cancel* to exit.",
-    salesReportHeader: (event) => {
-        const eventDate = toDate(new Date(event.event_date));
-        const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
-        const formattedDate = format(zonedDate, 'MMMM d, yyyy');
-        const eventName = event.event_name.split(',')[0];
-        return `*${event.event_id} - ${formattedDate} - ${eventName}*`;
-    },
-    salesReportLine: (label, value) => `   - ${label}: ${value || 'N/A'}`,
-    totalSalesLine: (value) => `*Total Sales:* ${value || 'N/A'}`
-};
-
-/**
- * Fetches and displays a list of upcoming events.
- * @param {string} from - The user's phone number.
- * @param {object} supabase - The Supabase client.
- * @param {boolean} showAll - Whether to show all upcoming events or just the next 5.
- * @returns {Promise<Array|null>} A promise that resolves to the list of events, or null on error.
- */
 async function listUpcomingEvents(from, supabase, showAll = false) {
     try {
         const today = new Date();
@@ -57,20 +24,27 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
 
         if (error) {
             console.error("Error fetching upcoming events:", error);
-            await sendMessage(from, MESSAGES.fetchError);
+            await sendMessage(from, "⚠️ *Error*\n\nI couldn't fetch the event list right now. Please try again later.");
             return null;
         }
 
         if (!events || events.length === 0) {
-            await sendMessage(from, MESSAGES.noUpcomingEvents);
+            await sendMessage(from, "📅 *No Upcoming Events*\n\nThere are no upcoming events found at this time.");
             return [];
         }
 
-        let message = MESSAGES.eventListHeader(events.length) + '\n\n';
-        message += events.map(MESSAGES.eventEntry).join('\n');
+        let message = `🎟️ *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date.\n\n`;
+        
+        events.forEach(event => {
+            const eventDate = toDate(new Date(event.event_date));
+            const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
+            const formattedDate = format(zonedDate, 'MMMM d');
+            const eventName = event.event_name.split(',')[0];
+            message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
+        });
         
         if (!showAll) {
-            message += '\n\n' + MESSAGES.askForSelection;
+            message += '\nType *All* to see all upcoming events.';
         }
 
         await sendMessage(from, message);
@@ -78,17 +52,11 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
 
     } catch (e) {
         console.error("Exception in listUpcomingEvents:", e);
-        await sendMessage(from, MESSAGES.fetchError);
+        await sendMessage(from, "⚠️ *Error*\n\nI couldn't fetch the event list right now. Please try again later.");
         return null;
     }
 }
 
-/**
- * Displays the sales report for a specific event.
- * @param {string} from - The user's phone number.
- * @param {object} supabase - The Supabase client.
- * @param {object} event - The selected event object.
- */
 async function showSalesReport(from, supabase, event) {
     const { data: salesData, error } = await supabase
         .from('events_sales')
@@ -104,25 +72,20 @@ async function showSalesReport(from, supabase, event) {
 
     const grossSales = (salesData.sales_gross || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-    let report = MESSAGES.salesReportHeader(event) + '\n\n';
-    report += MESSAGES.totalSalesLine(grossSales) + '\n';
-    report += MESSAGES.salesReportLine('GA', salesData.sales_total_ga);
-    report += MESSAGES.salesReportLine('VIP', salesData.sales_total_vip);
-    report += MESSAGES.salesReportLine('Coatcheck', salesData.sales_total_coatcheck);
+    const eventDate = toDate(new Date(event.event_date));
+    const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
+    const formattedDate = format(zonedDate, 'MMMM d, yyyy');
+    const eventName = event.event_name.split(',')[0];
+
+    let report = `*${event.event_id} - ${formattedDate} - ${eventName}*\n\n`;
+    report += `*Total Sales:* ${grossSales}\n`;
+    report += `   - GA: ${salesData.sales_total_ga || 'N/A'}\n`;
+    report += `   - VIP: ${salesData.sales_total_vip || 'N/A'}\n`;
+    report += `   - Coatcheck: ${salesData.sales_total_coatcheck || 'N/A'}`;
 
     await sendMessage(from, report);
 }
 
-
-/**
- * Handles the 'sales' command flow.
- * @param {string} from - The user's phone number.
- * @param {string} text - The user's message.
- * @param {object} salesState - The current state for the sales command.
- * @param {object} supabase - The Supabase client.
- * @param {object} user - The user object from the database.
- * @returns {object} The updated sales state.
- */
 async function handleSales(from, text, salesState, supabase, user) {
     if (!salesState[from]) {
         // Start of the flow
@@ -168,7 +131,7 @@ async function handleSales(from, text, salesState, supabase, user) {
             await showSalesReport(from, supabase, selectedEvent);
             delete salesState[from]; // End of flow
         } else {
-            await sendMessage(from, MESSAGES.selectionError);
+            await sendMessage(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list, or type *cancel* to exit.");
         }
     }
 

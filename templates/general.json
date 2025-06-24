@@ -1,0 +1,19 @@
+{
+  "welcome": "👋 *Welcome to Produkt Bot!*\n\nI'm here to help you manage events and check sales data.\n\nType *register* to get started or *help* for more information.",
+  
+  "unknownCommand": "❓ *Unknown Command*\n\nI don't recognize \"{{command}}\".\nType *help* to see available commands.",
+  
+  "accessDenied": "❌ *Access Denied*\n\nYou don't have permission to use this command.\n\nType *help* to see your available commands.",
+  
+  "userGreeting": "👋 Hello {{username}}!\n\nI don't recognize \"{{text}\".\nType *help* to see what I can do for you.",
+  
+  "guestGreeting": "👋 Hello!\n\nType *register* to get started or *help* for more information.",
+  
+  "technicalIssue": "⚠️ *Technical Issue*\n\nSomething went wrong on our end. Please try again in a few moments.",
+  
+  "maintenanceMode": "🔧 *Maintenance Mode*\n\nThe bot is currently undergoing maintenance. Please try again later.",
+  
+  "rateLimitExceeded": "⚠️ *Slow Down*\n\nYou're sending messages too quickly. Please wait a moment before trying again.",
+  
+  "globalRateLimit": "⚠️ *Service Temporarily Busy*\n\nPlease try again in a moment."
+}

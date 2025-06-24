@@ -1,4 +1,4 @@
-// --- Imports and Initial Setup ---
+// Enhanced index.js with improvements
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -18,131 +18,143 @@ const handleHelp = require('./commands/help');
 const handleStatus = require('./commands/status');
 const handleUnregister = require('./commands/unregister');
 const handleListUsers = require('./commands/listUsers');
-const handleSales = require('./commands/sales'); // NEW: Import sales handler
+const handleSales = require('./commands/sales');
 
-// NEW: Import the Event Manager
+// Import new modules
+const rateLimiter = require('./middleware/rateLimiter');
+const templates = require('./templates/templateLoader');
+const database = require('./scripts/database');
 const { manageEventSync } = require('./eventManager');
 
-// --- Environment Variable Validation ---
+// Environment validation
 const requiredEnvVars = [
-  'SUPABASE_URL',
-  'SUPABASE_KEY',
-  'WHATSAPP_TOKEN',
-  'PHONE_NUMBER_ID',
-  'ADMIN_PASSWORD',
-  'USER_PASSWORD',
+  'SUPABASE_URL', 'SUPABASE_KEY', 'WHATSAPP_TOKEN', 
+  'PHONE_NUMBER_ID', 'ADMIN_PASSWORD', 'USER_PASSWORD'
 ];
-
 validateEnvironmentVariables(requiredEnvVars);
 
-// --- Constants and Global State ---
-const {
-  SUPABASE_URL,
-  SUPABASE_KEY,
-} = process.env;
-
+// Constants
 const VERIFY_TOKEN = 'produktbot_verify';
 const PORT = process.env.PORT || 3000;
 
-// In-memory state for complex command flows.
+// State management (consider Redis for production)
 let registrationState = {};
 let confirmationState = {};
-let salesState = {}; // NEW: Add state for the sales command
+let salesState = {};
 
-// --- Service Clients ---
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Service clients
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 const app = express();
+
+// Enhanced middleware
 app.use(bodyParser.json());
+app.use((req, res, next) => {
+  res.setHeader('X-Powered-By', 'Produkt-Bot');
+  next();
+});
 
-// --- Express Routes ---
-
+// Health check endpoint
 app.get('/', (req, res) => {
   res.status(200).json({
     status: 'healthy',
-    message: 'Produkt Bot server is running and healthy!',
-    timestamp: new Date().toISOString()
+    message: 'Produkt Bot server is running!',
+    timestamp: new Date().toISOString(),
+    version: '2.1.0',
+    features: ['rate_limiting', 'templates', 'enhanced_logging']
   });
 });
 
+// Webhook verification
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('✅ [SUCCESS] Webhook verified.');
+    console.log('✅ Webhook verified successfully');
     res.status(200).send(challenge);
   } else {
-    console.error('❌ [FAILURE] Webhook verification failed.');
+    console.error('❌ Webhook verification failed');
     res.sendStatus(403);
   }
 });
 
+// Enhanced webhook handler
 app.post('/webhook', async (req, res) => {
   try {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (!message) return res.sendStatus(200);
+    
+    // Validate message structure
+    if (!message || message.type !== 'text') {
+      return res.sendStatus(200);
+    }
 
     const from = message.from;
     const text = message.text?.body?.trim();
     const messageId = message.id;
     
-    if (!text) return res.sendStatus(200);
-    
-    // NEW: Run event sync logic on every interaction.
-    // This runs in the background and won't block the user response.
-    manageEventSync().catch(err => console.error("Event Sync Background Process Failed:", err));
-
-    // Check if user exists in database
-    let { data: user, error: userError } = await supabase
-      .from('bot_users')
-      .select('*')
-      .eq('bot_userphone', from)
-      .maybeSingle();
-
-    if (userError) {
-      console.error('❌ Supabase error fetching user:', userError);
-      await sendMessage(from, "⚠️ Technical issue. Please try again later.");
+    if (!text || from === process.env.PHONE_NUMBER_ID) {
       return res.sendStatus(200);
     }
 
+    // Rate limiting check
+    const rateCheck = rateLimiter.isAllowed(from);
+    if (!rateCheck.allowed) {
+      await sendMessage(from, rateCheck.message);
+      return res.sendStatus(200);
+    }
+
+    // Background event sync
+    manageEventSync().catch(err => 
+      console.error("Event Sync Background Process Failed:", err)
+    );
+
+    // Get user data
+    const userResult = await database.getUser(from);
+    const user = userResult.success ? userResult.user : null;
+
+    if (userResult.success === false) {
+      console.error('Database error:', userResult.error);
+      const errorMessage = templates.get('errors', { 
+        errorCode: Date.now().toString().slice(-6) 
+      });
+      await sendMessage(from, errorMessage);
+      return res.sendStatus(200);
+    }
+
+    // Log incoming message
     logIncomingMessageWithTyping(from, text, user, messageId);
 
+    // Parse command with suggestions
     const commandResult = parseCommandWithSuggestions(text, user);
     const command = commandResult.command;
     const suggestion = commandResult.suggestion;
 
+    // Check for ongoing flows
     const isRegistering = registrationState[from];
     const isConfirming = confirmationState[from];
-    const isHandlingSales = salesState[from]; // NEW: Check for sales state
+    const isHandlingSales = salesState[from];
 
-    // --- Handle ongoing command flows ---
+    // Handle ongoing flows
     if (isRegistering) {
       registrationState = await handleRegister(from, text, registrationState, supabase);
       return res.sendStatus(200);
     }
-    if (isConfirming) {
-        if (isConfirming.action === 'unregister') {
-            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
-            return res.sendStatus(200);
-        }
+
+    if (isConfirming?.action === 'unregister') {
+      confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
+      return res.sendStatus(200);
     }
-    // NEW: Handle sales flow
+
     if (isHandlingSales) {
-        salesState = await handleSales(from, text, salesState, supabase, user);
-        return res.sendStatus(200);
+      salesState = await handleSales(from, text, salesState, supabase, user);
+      return res.sendStatus(200);
     }
     
-    // --- Handle new commands ---
-
-    // UPDATED: Logic for handling unregistered users cleanly
-    if (!user) {
-        if(command === 'register' || text.toLowerCase() === 'register') {
-            registrationState = await handleRegister(from, text, registrationState, supabase);
-        } else {
-            await handleHelp(from, null);
-        }
-        return res.sendStatus(200);
+    // Handle new commands
+    if (!user && command !== 'register') {
+      await handleHelp(from, null);
+      return res.sendStatus(200);
     }
 
     if (command) {
@@ -154,48 +166,59 @@ app.post('/webhook', async (req, res) => {
           await handleHelp(from, user);
           break;
 
+        case 'register':
+          registrationState = await handleRegister(from, text, registrationState, supabase);
+          break;
+
         case 'status':
           await handleStatus(from, user, parameter, supabase);
           break;
 
         case 'unregister':
-          if (user.bot_userrole === 'ADMIN' && parameter) {
-            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, parameter);
-          } else {
-            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
-          }
+          const targetUsername = user?.bot_userrole === 'ADMIN' && parameter ? parameter : '';
+          confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, targetUsername);
           break;
 
         case 'list':
-          if (textParts[1] === 'users' && user.bot_userrole === 'ADMIN') {
+          if (textParts[1] === 'users' && user?.bot_userrole === 'ADMIN') {
             await handleListUsers(from, supabase);
           } else {
-            await sendMessage(from, `❓ *Unknown Command*\n\nI don't recognize "${text}".\nType *help* to see available commands.`);
+            const unknownMessage = `❓ *Unknown Command*\n\nI don't recognize "${text}".\nType *help* to see available commands.`;
+            await sendMessage(from, unknownMessage);
           }
           break;
         
-        // NEW: Case for sales command
         case 'sales':
-            salesState = await handleSales(from, text, salesState, supabase, user);
-            break;
+          salesState = await handleSales(from, text, salesState, supabase, user);
+          break;
 
         default:
-          await sendMessage(from, `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`);
+          const defaultMessage = user 
+            ? `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`
+            : `👋 Hello!\n\nI don't recognize "${text}".\nType *register* to get started or *help* for more information.`;
+          await sendMessage(from, defaultMessage);
       }
-    } else if (suggestion && suggestion.message) {
+    } else if (suggestion?.message) {
       await sendMessage(from, suggestion.message);
     } else {
-      await sendMessage(from, `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`);
+      const fallbackMessage = user 
+        ? `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`
+        : `👋 Hello!\n\nType *register* to get started or *help* for more information.`;
+      await sendMessage(from, fallbackMessage);
     }
 
     res.sendStatus(200);
+
   } catch (error) {
-    console.error('❌ Error in POST /webhook:', error);
+    console.error('❌ Webhook error:', error);
     
     try {
       const from = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
       if (from) {
-        await sendMessage(from, "😅 Something went wrong. Please try again!");
+        const errorMessage = templates.get('errors', { 
+          errorCode: Date.now().toString().slice(-6) 
+        });
+        await sendMessage(from, errorMessage);
       }
     } catch (sendError) {
       console.error('❌ Failed to send error message:', sendError);
@@ -205,36 +228,83 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// --- Stats API ---
+// Enhanced stats endpoint
 app.get('/api/stats', async (req, res) => {
   try {
-    const { data: stats, error } = await supabase
-      .from('bot_users')
-      .select('bot_userrole');
+    const [dbStats, rateLimitStats] = await Promise.all([
+      database.getAllUsers(),
+      Promise.resolve(rateLimiter.getStatus())
+    ]);
 
-    if (error) throw error;
+    if (!dbStats.success) {
+      throw new Error(dbStats.error);
+    }
 
+    const users = dbStats.users || [];
     const summary = {
-      total: stats.length,
-      admins: stats.filter(u => u.bot_userrole === 'ADMIN').length,
-      users: stats.filter(u => u.bot_userrole === 'USER').length,
-      timestamp: new Date().toISOString()
+      users: {
+        total: users.length,
+        admins: users.filter(u => u.bot_userrole === 'ADMIN').length,
+        regular: users.filter(u => u.bot_userrole === 'USER').length
+      },
+      rateLimiting: rateLimitStats,
+      templates: {
+        loaded: templates.list().length,
+        available: templates.list()
+      },
+      server: {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+      }
     };
 
     res.json(summary);
   } catch (error) {
-    console.error('❌ Error fetching stats:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
+    console.error('❌ Stats endpoint error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch statistics',
+      timestamp: new Date().toISOString() 
+    });
   }
 });
 
-// --- Server Startup ---
-app.listen(PORT, () => {
-  console.log(`🚀 Produkt Bot server is running on port ${PORT}`);
-  console.log(`✅ Server started successfully at ${new Date().toISOString()}`);
+// Admin endpoint for template reload (useful for development)
+app.post('/api/admin/reload-templates', (req, res) => {
+  try {
+    templates.reload();
+    res.json({ 
+      success: true, 
+      message: 'Templates reloaded successfully',
+      count: templates.list().length 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
 });
 
-// --- Keep-Alive (Prevent Render Sleep) ---
+// Test database connection on startup
+database.testConnection()
+  .then(result => {
+    if (result.success) {
+      console.log('✅ Database connection verified');
+    } else {
+      console.error('❌ Database connection failed:', result.error);
+    }
+  });
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Enhanced Produkt Bot server running on port ${PORT}`);
+  console.log(`✅ Server started at ${new Date().toISOString()}`);
+  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging`);
+  console.log(`📋 Templates loaded: ${templates.list().length}`);
+});
+
+// Keep-alive for Render.com
 setInterval(() => {
-  console.log('🔄 Keep-alive ping -', new Date().toISOString());
-}, 13 * 60 * 1000); // Every 13 minutes
+  console.log(`🔄 Keep-alive ping - ${new Date().toISOString()}`);
+}, 13 * 60 * 1000);

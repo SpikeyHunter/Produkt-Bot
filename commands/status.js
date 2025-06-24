@@ -1,82 +1,47 @@
-// commands/status.js - Status command handler
-
+// commands/status.js - Status command handler with templates
 const { sendMessage, formatPhoneNumber } = require('../utils');
+const templates = require('../templates/templateLoader');
+const database = require('../scripts/database');
 
-// Status messages
-const MESSAGES = {
-  userStatus: (username, role, phone) => `📊 *Your Status*
-
-👤 *Name:* ${username}
-🏷️ *Role:* ${role}
-📱 *Phone:* ${formatPhoneNumber(phone)}
-✅ *Status:* Active
-
-You're all set up and ready to go!`,
-
-  otherUserStatus: (username, role, phone) => `📊 *User Status*
-
-👤 *Name:* ${username}
-🏷️ *Role:* ${role}
-📱 *Phone:* ${formatPhoneNumber(phone)}
-✅ *Status:* Active`,
-
-  userNotFound: (searchName) => `❌ *User Not Found*
-
-No user found with the name "${searchName}".
-
-Use *list users* to see all registered users.`,
-
-  unregistered: `📊 *Your Status*
+async function handleStatus(from, user, parameter = '', supabase) {
+  if (!user) {
+    const unregisteredMessage = `📊 *Your Status*
 
 ❌ You are not currently registered.
 
-Type *register* to get started!`,
-
-  accessDenied: `❌ *Access Denied*
-
-Only admins can check other users' status.
-
-Type *help* to see your available commands.`,
-
-  invalidCommand: `❓ *Invalid Command*
-
-Usage: *status* or *status <username>*
-
-Type *help* for more information.`
-};
-
-/**
- * Handles status command
- * @param {string} from - User's phone number
- * @param {object} user - User data from database
- * @param {string} parameter - Optional username parameter
- * @param {object} supabase - Supabase client
- */
-async function handleStatus(from, user, parameter = '', supabase) {
-  if (!user) {
-    await sendMessage(from, MESSAGES.unregistered);
+Type *register* to get started!`;
+    await sendMessage(from, unregisteredMessage);
     return;
   }
 
   // If no parameter, show user's own status
   if (!parameter) {
-    const statusMessage = MESSAGES.userStatus(
-      user.bot_username,
-      user.bot_userrole,
-      user.bot_userphone
-    );
+    const statusMessage = `📊 *Your Status*
+
+👤 *Name:* ${user.bot_username}
+🏷️ *Role:* ${user.bot_userrole}
+📱 *Phone:* ${formatPhoneNumber(user.bot_userphone)}
+✅ *Status:* Active
+
+You're all set up and ready to go!`;
+    
     await sendMessage(from, statusMessage);
     return;
   }
 
   // Parameter provided - admin checking another user
   if (user.bot_userrole !== 'ADMIN') {
-    await sendMessage(from, MESSAGES.accessDenied);
+    const accessDeniedMessage = `❌ *Access Denied*
+
+Only admins can check other users' status.
+
+Type *help* to see your available commands.`;
+    await sendMessage(from, accessDeniedMessage);
     return;
   }
 
   try {
-    // Search for user by username
+    // Search for user by username using existing supabase query
     const { data: targetUser, error } = await supabase
       .from('bot_users')
       .select('*')
@@ -90,15 +55,22 @@ async function handleStatus(from, user, parameter = '', supabase) {
     }
 
     if (!targetUser) {
-      await sendMessage(from, MESSAGES.userNotFound(parameter));
+      const userNotFoundMessage = `❌ *User Not Found*
+
+No user found with the name "${parameter}".
+
+Use *list users* to see all registered users.`;
+      await sendMessage(from, userNotFoundMessage);
       return;
     }
 
-    const statusMessage = MESSAGES.otherUserStatus(
-      targetUser.bot_username,
-      targetUser.bot_userrole,
-      targetUser.bot_userphone
-    );
+    const statusMessage = `📊 *User Status*
+
+👤 *Name:* ${targetUser.bot_username}
+🏷️ *Role:* ${targetUser.bot_userrole}
+📱 *Phone:* ${formatPhoneNumber(targetUser.bot_userphone)}
+✅ *Status:* Active`;
+
     await sendMessage(from, statusMessage);
 
   } catch (error) {
