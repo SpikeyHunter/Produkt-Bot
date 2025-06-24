@@ -1,11 +1,9 @@
-// commands/help.js - Help command handler
-
 const { sendMessage } = require('../utils');
 
-// Help messages for different user roles
 const MESSAGES = {
   user: `👤 *User Commands*
 
+🔹 *sales* - View event sales figures
 🔹 *help* - Show this help menu
 🔹 *status* - Check your current status
 🔹 *unregister* - Remove your registration
@@ -13,7 +11,7 @@ const MESSAGES = {
 Need more assistance? Just ask!`,
 
   admin: `👨‍💼 *Admin Commands*
-
+   *sales* - View event sales figures
 🔹 *help* - Show this help menu
 🔹 *status* - Check your current status
 🔹 *status <username>* - Check another user's status
@@ -31,11 +29,6 @@ Need more assistance? Just ask!`,
 Need more assistance? Just ask!`
 };
 
-/**
- * Handles help command based on user role
- * @param {string} from - User's phone number
- * @param {object} user - User data from database
- */
 async function handleHelp(from, user = null) {
   if (!user) {
     await sendMessage(from, MESSAGES.general);

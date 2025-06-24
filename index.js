@@ -4,10 +4,10 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 
-// Import utilities - UPDATED with fuzzy matching
+// Import utilities
 const { 
   validateEnvironmentVariables, 
-  parseCommandWithSuggestions,  // NEW: Enhanced parser
+  parseCommandWithSuggestions,
   logIncomingMessageWithTyping,
   sendMessage 
 } = require('./utils');
@@ -18,6 +18,10 @@ const handleHelp = require('./commands/help');
 const handleStatus = require('./commands/status');
 const handleUnregister = require('./commands/unregister');
 const handleListUsers = require('./commands/listUsers');
+const handleSales = require('./commands/sales'); // NEW: Import sales handler
+
+// NEW: Import the Event Manager
+const { manageEventSync } = require('./eventManager');
 
 // --- Environment Variable Validation ---
 const requiredEnvVars = [
@@ -40,9 +44,10 @@ const {
 const VERIFY_TOKEN = 'produktbot_verify';
 const PORT = process.env.PORT || 3000;
 
-// In-memory state for registration flow and confirmations.
+// In-memory state for complex command flows.
 let registrationState = {};
 let confirmationState = {};
+let salesState = {}; // NEW: Add state for the sales command
 
 // --- Service Clients ---
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -83,6 +88,10 @@ app.post('/webhook', async (req, res) => {
     const messageId = message.id;
     
     if (!text) return res.sendStatus(200);
+    
+    // NEW: Run event sync logic on every interaction.
+    // This runs in the background and won't block the user response.
+    manageEventSync().catch(err => console.error("Event Sync Background Process Failed:", err));
 
     // Check if user exists in database
     let { data: user, error: userError } = await supabase
@@ -99,56 +108,45 @@ app.post('/webhook', async (req, res) => {
 
     logIncomingMessageWithTyping(from, text, user, messageId);
 
-    // NEW: Enhanced command parsing with suggestions
     const commandResult = parseCommandWithSuggestions(text, user);
     const command = commandResult.command;
     const suggestion = commandResult.suggestion;
 
     const isRegistering = registrationState[from];
     const isConfirming = confirmationState[from];
+    const isHandlingSales = salesState[from]; // NEW: Check for sales state
 
-    // --- Handle Registration Flow ---
-    if ((!user && !isRegistering) || command === 'register') {
-      if (user && command === 'register') {
-        // User already registered, prevent re-registration
-        await sendMessage(from, `❌ *Already Registered*
-
-You're already registered as *${user.bot_username}* (${user.bot_userrole}).
-
-Type *help* to see available commands.`);
-        return res.sendStatus(200);
-      }
-      
-      registrationState = await handleRegister(from, text, registrationState, supabase);
-      return res.sendStatus(200);
-    }
-
-    // Handle registration in progress
+    // --- Handle ongoing command flows ---
     if (isRegistering) {
       registrationState = await handleRegister(from, text, registrationState, supabase);
       return res.sendStatus(200);
     }
-
-    // Handle confirmation states
     if (isConfirming) {
-      if (isConfirming.action === 'unregister') {
-        confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
+        if (isConfirming.action === 'unregister') {
+            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
+            return res.sendStatus(200);
+        }
+    }
+    // NEW: Handle sales flow
+    if (isHandlingSales) {
+        salesState = await handleSales(from, text, salesState, supabase, user);
         return res.sendStatus(200);
-      }
     }
+    
+    // --- Handle new commands ---
 
-    // --- Handle Commands for Registered Users ---
+    // UPDATED: Logic for handling unregistered users cleanly
     if (!user) {
-      // Unregistered user - start registration
-      registrationState = await handleRegister(from, text, registrationState, supabase);
-      return res.sendStatus(200);
+        if(command === 'register' || text.toLowerCase() === 'register') {
+            registrationState = await handleRegister(from, text, registrationState, supabase);
+        } else {
+            await handleHelp(from, null);
+        }
+        return res.sendStatus(200);
     }
 
-    // If we have a valid command, execute it
     if (command) {
-      // Parse admin commands with parameters
       const textParts = text.toLowerCase().trim().split(' ');
-      const baseCommand = textParts[0];
       const parameter = textParts.slice(1).join(' ');
 
       switch (command) {
@@ -162,10 +160,8 @@ Type *help* to see available commands.`);
 
         case 'unregister':
           if (user.bot_userrole === 'ADMIN' && parameter) {
-            // Admin unregistering another user
             confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, parameter);
           } else {
-            // User unregistering themselves
             confirmationState = await handleUnregister(from, text, confirmationState, supabase, user);
           }
           break;
@@ -174,28 +170,22 @@ Type *help* to see available commands.`);
           if (textParts[1] === 'users' && user.bot_userrole === 'ADMIN') {
             await handleListUsers(from, supabase);
           } else {
-            await sendMessage(from, `❓ *Unknown Command*
-
-I don't recognize "${text}".
-Type *help* to see available commands.`);
+            await sendMessage(from, `❓ *Unknown Command*\n\nI don't recognize "${text}".\nType *help* to see available commands.`);
           }
           break;
+        
+        // NEW: Case for sales command
+        case 'sales':
+            salesState = await handleSales(from, text, salesState, supabase, user);
+            break;
 
         default:
-          await sendMessage(from, `👋 Hello ${user.bot_username}!
-
-I don't recognize "${text}".
-Type *help* to see what I can do for you.`);
+          await sendMessage(from, `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`);
       }
     } else if (suggestion && suggestion.message) {
-      // NEW: Send suggestion for typos
       await sendMessage(from, suggestion.message);
     } else {
-      // No command match and no good suggestion
-      await sendMessage(from, `👋 Hello ${user.bot_username}!
-
-I don't recognize "${text}".
-Type *help* to see what I can do for you.`);
+      await sendMessage(from, `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`);
     }
 
     res.sendStatus(200);
