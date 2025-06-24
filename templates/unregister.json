@@ -1,0 +1,17 @@
+{
+  "confirmSelf": "⚠️ *Confirm Account Deletion*\n\nAre you sure you want to permanently delete your account? This action cannot be undone and will remove all your data.\n\nReply *yes* to confirm or *no* to cancel.",
+  
+  "confirmOther": "⚠️ *Confirm User Deletion*\n\nAre you sure you want to permanently delete {{username}}'s account? This action cannot be undone.\n\nReply *yes* to confirm or *no* to cancel.",
+  
+  "successSelf": "✅ *Account Deleted Successfully*\n\nYour account has been completely removed from our system.\n\nSend *register* anytime to create a new account!",
+  
+  "successOther": "✅ *User Deleted Successfully*\n\n{{username}}'s account has been completely removed from the system.",
+  
+  "canceled": "❌ *Deletion Canceled*\n\nNo worries! The account remains active.\n\nType *help* to see available commands.",
+  
+  "invalidResponse": "❓ *Please Confirm*\n\nPlease reply with *yes* to confirm or *no* to cancel.",
+  
+  "userNotFound": "❌ *User Not Found*\n\nNo user found with the name \"{{username}}\".\n\nUse *list users* to see all registered users.",
+  
+  "cannotDeleteAdmin": "❌ *Cannot Delete Admin*\n\nYou cannot delete another admin account for security reasons.\n\nUse *unregister* to delete your own account."
+}

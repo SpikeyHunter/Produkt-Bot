@@ -13,5 +13,9 @@
   
   "salesCanceled": "✅ Sales command canceled.",
   
-  "noSalesData": "⚠️ Could not retrieve sales data for this event."
+  "noSalesData": "⚠️ Could not retrieve sales data for this event.",
+  
+  "totalSalesLine": "*Total Sales:* {{amount}}",
+  
+  "salesReportLine": "   - {{label}}: {{value}}"
 }

@@ -1,29 +1,23 @@
-// commands/status.js - Status command handler with templates
+// commands/status.js - ZERO hardcoded messages
 const { sendMessage, formatPhoneNumber } = require('../utils');
 const templates = require('../templates/templateLoader');
-const database = require('../scripts/database');
 
 async function handleStatus(from, user, parameter = '', supabase) {
+  const statusTemplates = templates.get('status');
+  const generalTemplates = templates.get('general');
+
   if (!user) {
-    const unregisteredMessage = `📊 *Your Status*
-
-❌ You are not currently registered.
-
-Type *register* to get started!`;
-    await sendMessage(from, unregisteredMessage);
+    await sendMessage(from, statusTemplates.unregistered);
     return;
   }
 
   // If no parameter, show user's own status
   if (!parameter) {
-    const statusMessage = `📊 *Your Status*
-
-👤 *Name:* ${user.bot_username}
-🏷️ *Role:* ${user.bot_userrole}
-📱 *Phone:* ${formatPhoneNumber(user.bot_userphone)}
-✅ *Status:* Active
-
-You're all set up and ready to go!`;
+    const statusMessage = templates.get('status', {
+      username: user.bot_username,
+      role: user.bot_userrole,
+      phone: formatPhoneNumber(user.bot_userphone)
+    }).userStatus;
     
     await sendMessage(from, statusMessage);
     return;
@@ -31,12 +25,7 @@ You're all set up and ready to go!`;
 
   // Parameter provided - admin checking another user
   if (user.bot_userrole !== 'ADMIN') {
-    const accessDeniedMessage = `❌ *Access Denied*
-
-Only admins can check other users' status.
-
-Type *help* to see your available commands.`;
-    await sendMessage(from, accessDeniedMessage);
+    await sendMessage(from, generalTemplates.accessDenied);
     return;
   }
 
@@ -50,32 +39,27 @@ Type *help* to see your available commands.`;
 
     if (error) {
       console.error('Error searching for user:', error);
-      await sendMessage(from, "⚠️ Technical issue. Please try again later.");
+      await sendMessage(from, generalTemplates.technicalIssue);
       return;
     }
 
     if (!targetUser) {
-      const userNotFoundMessage = `❌ *User Not Found*
-
-No user found with the name "${parameter}".
-
-Use *list users* to see all registered users.`;
+      const userNotFoundMessage = templates.get('status', { username: parameter }).userNotFound;
       await sendMessage(from, userNotFoundMessage);
       return;
     }
 
-    const statusMessage = `📊 *User Status*
-
-👤 *Name:* ${targetUser.bot_username}
-🏷️ *Role:* ${targetUser.bot_userrole}
-📱 *Phone:* ${formatPhoneNumber(targetUser.bot_userphone)}
-✅ *Status:* Active`;
+    const statusMessage = templates.get('status', {
+      username: targetUser.bot_username,
+      role: targetUser.bot_userrole,
+      phone: formatPhoneNumber(targetUser.bot_userphone)
+    }).otherUserStatus;
 
     await sendMessage(from, statusMessage);
 
   } catch (error) {
     console.error('Status command error:', error);
-    await sendMessage(from, "😅 Something went wrong. Please try again!");
+    await sendMessage(from, generalTemplates.technicalIssue);
   }
 }
 

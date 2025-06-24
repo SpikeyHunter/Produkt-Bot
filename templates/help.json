@@ -1,0 +1,7 @@
+{
+  "user": "👤 *User Commands*\n\n🔹 *sales* - View event sales figures\n🔹 *help* - Show this help menu\n🔹 *status* - Check your current status\n🔹 *unregister* - Remove your registration\n\nNeed more assistance? Just ask!",
+  
+  "admin": "👨‍💼 *Admin Commands*\n\n🔹 *sales* - View event sales figures\n🔹 *help* - Show this help menu\n🔹 *status* - Check your current status\n🔹 *status <username>* - Check another user's status\n🔹 *unregister* - Remove your registration\n🔹 *unregister <username>* - Remove another user\n🔹 *list users* - View all registered users\n\nNeed more assistance? Just ask!",
+  
+  "general": "📋 *Available Commands*\n\n🔹 *help* - Show this help menu\n🔹 *register* - Start registration process\n\nNeed more assistance? Just ask!"
+}

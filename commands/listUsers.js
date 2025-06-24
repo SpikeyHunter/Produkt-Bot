@@ -1,9 +1,12 @@
-// commands/listUsers.js - List users command handler with templates
+// commands/listUsers.js - ZERO hardcoded messages
 const { sendMessage, formatPhoneNumber } = require('../utils');
 const templates = require('../templates/templateLoader');
 
 async function handleListUsers(from, supabase) {
   try {
+    const listUsersTemplates = templates.get('listUsers');
+    const generalTemplates = templates.get('general');
+    
     // Get all registered users
     const { data: users, error } = await supabase
       .from('bot_users')
@@ -12,16 +15,12 @@ async function handleListUsers(from, supabase) {
 
     if (error) {
       console.error('Error fetching users:', error);
-      await sendMessage(from, `⚠️ *Error Loading Users*
-
-Unable to load the user list right now. Please try again later.`);
+      await sendMessage(from, generalTemplates.technicalIssue);
       return;
     }
 
     if (!users || users.length === 0) {
-      await sendMessage(from, `📋 *User List*
-
-No users are currently registered in the system.`);
+      await sendMessage(from, listUsersTemplates.noUsers);
       return;
     }
 
@@ -33,19 +32,25 @@ No users are currently registered in the system.`);
       return a.bot_userrole === 'ADMIN' ? -1 : 1;
     });
 
-    // Build user list message
-    let message = `📋 *Registered Users (${sortedUsers.length})*\n\n`;
+    // Build user list message using templates
+    const headerMessage = templates.get('listUsers', { count: sortedUsers.length }).header;
+    let message = headerMessage + '\n\n';
     
     sortedUsers.forEach((user, index) => {
       const phoneFormatted = formatPhoneNumber(user.bot_userphone);
       const roleIcon = user.bot_userrole === 'ADMIN' ? '👨‍💼' : '👤';
       
-      message += `${roleIcon} *${user.bot_username}*\n`;
-      message += `   📱 ${phoneFormatted}\n`;
-      message += `   🏷️ ${user.bot_userrole}\n`;
+      const userEntry = templates.get('listUsers', {
+        icon: roleIcon,
+        username: user.bot_username,
+        phone: phoneFormatted,
+        role: user.bot_userrole
+      }).userEntry;
+      
+      message += userEntry;
       
       if (index < sortedUsers.length - 1) {
-        message += '\n';
+        message += '\n\n';
       }
     });
 
@@ -53,9 +58,8 @@ No users are currently registered in the system.`);
 
   } catch (error) {
     console.error('List users error:', error);
-    await sendMessage(from, `⚠️ *Error Loading Users*
-
-Unable to load the user list right now. Please try again later.`);
+    const generalTemplates = templates.get('general');
+    await sendMessage(from, generalTemplates.technicalIssue);
   }
 }
 

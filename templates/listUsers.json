@@ -1,0 +1,7 @@
+{
+  "noUsers": "📋 *User List*\n\nNo users are currently registered in the system.",
+  
+  "header": "📋 *Registered Users ({{count}})*",
+  
+  "userEntry": "{{icon}} *{{username}}*\n   📱 {{phone}}\n   🏷️ {{role}}"
+}
