@@ -1,10 +1,10 @@
-// commands/help.js - Fixed to properly handle template variables
+// commands/help.js - Updated with unregistered user handling
 const { sendMessage } = require('../utils');
 const templates = require('../templates/templateLoader');
 
 async function handleHelp(from, user = null) {
   try {
-    let templateKey = 'general';
+    let templateKey = 'unregistered';
     
     if (user) {
       templateKey = user.bot_userrole === 'ADMIN' ? 'admin' : 'user';

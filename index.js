@@ -115,10 +115,8 @@ app.post('/webhook', async (req, res) => {
 
     if (userResult.success === false) {
       console.error('Database error:', userResult.error);
-      const errorMessage = templates.get('errors', { 
-        errorCode: Date.now().toString().slice(-6) 
-      });
-      await sendMessage(from, errorMessage);
+      const generalTemplates = templates.get('general');
+      await sendMessage(from, generalTemplates.technicalIssue);
       return res.sendStatus(200);
     }
 
@@ -151,9 +149,10 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
     
-    // Handle new commands
-    if (!user && command !== 'register') {
-      await handleHelp(from, null);
+    // UPDATED: Handle unregistered users
+    if (!user && command !== 'register' && command !== 'help') {
+      const generalTemplates = templates.get('general');
+      await sendMessage(from, generalTemplates.welcomeUnregistered);
       return res.sendStatus(200);
     }
 
@@ -171,40 +170,74 @@ app.post('/webhook', async (req, res) => {
           break;
 
         case 'status':
-          await handleStatus(from, user, parameter, supabase);
+          // Only allow if user is registered
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            await handleStatus(from, user, parameter, supabase);
+          }
           break;
 
         case 'unregister':
-          const targetUsername = user?.bot_userrole === 'ADMIN' && parameter ? parameter : '';
-          confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, targetUsername);
+          // Only allow if user is registered
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            const targetUsername = user?.bot_userrole === 'ADMIN' && parameter ? parameter : '';
+            confirmationState = await handleUnregister(from, text, confirmationState, supabase, user, targetUsername);
+          }
           break;
 
         case 'list':
-          if (textParts[1] === 'users' && user?.bot_userrole === 'ADMIN') {
+          // Only allow if user is registered and admin
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else if (textParts[1] === 'users' && user?.bot_userrole === 'ADMIN') {
             await handleListUsers(from, supabase);
           } else {
-            const unknownMessage = `❓ *Unknown Command*\n\nI don't recognize "${text}".\nType *help* to see available commands.`;
-            await sendMessage(from, unknownMessage);
+            const generalTemplates = templates.get('general', { command: text });
+            await sendMessage(from, generalTemplates.unknownCommand);
           }
           break;
         
         case 'sales':
-          salesState = await handleSales(from, text, salesState, supabase, user);
+          // Only allow if user is registered
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            salesState = await handleSales(from, text, salesState, supabase, user);
+          }
           break;
 
         default:
-          const defaultMessage = user 
-            ? `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`
-            : `👋 Hello!\n\nI don't recognize "${text}".\nType *register* to get started or *help* for more information.`;
-          await sendMessage(from, defaultMessage);
+          if (user) {
+            const generalTemplates = templates.get('general', { 
+              username: user.bot_username, 
+              text: text 
+            });
+            await sendMessage(from, generalTemplates.userGreeting);
+          } else {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.guestGreeting);
+          }
       }
     } else if (suggestion?.message) {
       await sendMessage(from, suggestion.message);
     } else {
-      const fallbackMessage = user 
-        ? `👋 Hello ${user.bot_username}!\n\nI don't recognize "${text}".\nType *help* to see what I can do for you.`
-        : `👋 Hello!\n\nType *register* to get started or *help* for more information.`;
-      await sendMessage(from, fallbackMessage);
+      if (user) {
+        const generalTemplates = templates.get('general', { 
+          username: user.bot_username, 
+          text: text 
+        });
+        await sendMessage(from, generalTemplates.userGreeting);
+      } else {
+        const generalTemplates = templates.get('general');
+        await sendMessage(from, generalTemplates.guestGreeting);
+      }
     }
 
     res.sendStatus(200);
@@ -215,10 +248,8 @@ app.post('/webhook', async (req, res) => {
     try {
       const from = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
       if (from) {
-        const errorMessage = templates.get('errors', { 
-          errorCode: Date.now().toString().slice(-6) 
-        });
-        await sendMessage(from, errorMessage);
+        const generalTemplates = templates.get('general');
+        await sendMessage(from, generalTemplates.technicalIssue);
       }
     } catch (sendError) {
       console.error('❌ Failed to send error message:', sendError);

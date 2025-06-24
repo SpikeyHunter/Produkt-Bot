@@ -1,11 +1,13 @@
 {
   "welcome": "👋 *Welcome to Produkt Bot!*\n\nI'm here to help you manage events and check sales data.\n\nType *register* to get started or *help* for more information.",
   
+  "welcomeUnregistered": "🎉 *Welcome to Produkt App - Chat Bot*\n\nYou are not registered yet!\n\nTo begin the process, type: *register*\nIf you need help, type: *help*",
+  
   "unknownCommand": "❓ *Unknown Command*\n\nI don't recognize \"{{command}}\".\nType *help* to see available commands.",
   
   "accessDenied": "❌ *Access Denied*\n\nYou don't have permission to use this command.\n\nType *help* to see your available commands.",
   
-  "userGreeting": "👋 Hello {{username}}!\n\nI don't recognize \"{{text}\".\nType *help* to see what I can do for you.",
+  "userGreeting": "👋 Hello {{username}}!\n\nI don't recognize \"{{text}}\".\nType *help* to see what I can do for you.",
   
   "guestGreeting": "👋 Hello!\n\nType *register* to get started or *help* for more information.",
   
