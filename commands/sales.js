@@ -1,4 +1,4 @@
-// commands/sales.js - Updated with complete sales report
+// commands/sales.js - Fixed imports
 const { sendMessage } = require('../utils');
 const { format } = require('date-fns');
 const { utcToZonedTime } = require('date-fns-tz');
@@ -27,7 +27,6 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
 
         if (error) {
             console.error("Error fetching upcoming events:", error);
-            const salesTemplates = templates.get('sales');
             await sendMessage(from, "❌ *Database Error*\n\nI couldn't fetch the event list from our database. Please try again in a moment.");
             return null;
         }
@@ -38,8 +37,7 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         }
 
         // Build message using templates with variables
-        const salesTemplates = templates.get('sales', { count: events.length });
-        let message = salesTemplates.eventListHeader + '\n\n';
+        let message = `🎟️ *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
         
         events.forEach(event => {
             const eventDate = new Date(event.event_date);
@@ -50,8 +48,7 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         });
         
         if (!showAll) {
-            const salesTemplatesForSelection = templates.get('sales');
-            message += '\n' + salesTemplatesForSelection.askForSelection;
+            message += '\nType *all* to see all upcoming events or *cancel* to exit.';
         }
 
         await sendMessage(from, message);

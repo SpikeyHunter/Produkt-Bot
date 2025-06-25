@@ -164,22 +164,57 @@ async function insertOrders(orders, existingOrders) {
   }
 }
 
-// Save sales summary
+// Enhanced save sales summary with ALL fields
 async function saveSalesSummary(eventId) {
-  const { data: allOrders } = await supabase
-    .from("events_orders")
-    .select("*")
-    .eq("event_id", eventId);
+  // Read ALL orders for this event from the database
+  let allOrders = [];
+  let from = 0;
+  const batchSize = 1000;
+  
+  while (true) {
+    const { data: orderBatch, error } = await supabase
+      .from("events_orders")
+      .select("*")
+      .eq("event_id", eventId)
+      .range(from, from + batchSize - 1);
+      
+    if (error) {
+      console.error("Error reading orders from database:", error);
+      return;
+    }
+    
+    if (!orderBatch || orderBatch.length === 0) {
+      break;
+    }
+    
+    allOrders.push(...orderBatch);
+    
+    if (orderBatch.length < batchSize) {
+      break; // This was the last batch
+    }
+    
+    from += batchSize;
+  }
   
   if (!allOrders?.length) return;
   
+  // Split orders into paid and free based on actual revenue
   const paidOrders = allOrders.filter(order => 
     (order.order_gross && order.order_gross > 0) || 
     (order.order_net && order.order_net > 0)
   );
   
-  let paidGA = 0, paidVIP = 0, paidOUTLET = 0;
-  let totalGross = 0, totalNet = 0;
+  const freeOrders = allOrders.filter(order => 
+    (!order.order_gross || order.order_gross === 0) && 
+    (!order.order_net || order.order_net === 0)
+  );
+  
+  // Calculate PAID totals - count ALL paid tickets by category (including PHOTO as VIP)
+  let paidGA = 0;
+  let paidVIP = 0;
+  let paidOUTLET = 0;
+  let totalGross = 0;
+  let totalNet = 0;
   
   paidOrders.forEach(order => {
     const quantity = order.order_quantity || 1;
@@ -187,16 +222,85 @@ async function saveSalesSummary(eventId) {
     if (order.order_gross) totalGross += order.order_gross;
     if (order.order_net) totalNet += order.order_net;
     
-    if (order.order_category === 'GA') paidGA += quantity;
-    else if (order.order_category === 'VIP' || order.order_category === 'PHOTO') paidVIP += quantity;
-    else if (order.order_category === 'OUTLET') paidOUTLET += quantity;
+    // Count ALL paid tickets by category (not just specific names)
+    if (order.order_category === 'GA') {
+      paidGA += quantity;
+    } else if (order.order_category === 'VIP' || order.order_category === 'PHOTO') {
+      paidVIP += quantity;
+    } else if (order.order_category === 'OUTLET') {
+      paidOUTLET += quantity;
+    }
   });
   
+  // Calculate COMP tickets
+  let compGA = 0;
+  let compVIP = 0;
+  
+  freeOrders.forEach(order => {
+    if (order.order_ref_type === 'BACKSTAGE' && 
+        order.order_sales_item_name && 
+        order.order_sales_item_name.toLowerCase().includes('comp')) {
+      
+      const quantity = order.order_quantity || 1;
+      const itemName = order.order_sales_item_name.toLowerCase();
+      const category = order.order_category;
+      
+      // Check for VIP indicators first (including PHOTO category)
+      if (category === 'VIP' || category === 'PHOTO' ||
+          itemName.includes('vip') || 
+          itemName.includes('side stage')) {
+        compVIP += quantity;
+      }
+      // Check for GA indicators
+      else if (category === 'GA' || category === 'GUEST') {
+        compGA += quantity;
+      }
+    }
+  });
+  
+  // Calculate FREE tickets
+  let freeGA = 0;
+  let freeVIP = 0;
+  
+  freeOrders.forEach(order => {
+    if (order.order_ref_type !== 'BACKSTAGE' &&
+        order.order_sales_item_name) {
+      
+      const itemName = order.order_sales_item_name.toLowerCase();
+      const quantity = order.order_quantity || 1;
+      
+      // Skip excluded items
+      if (itemName.includes('comp') || 
+          itemName.includes('billet physique') || 
+          itemName.includes('door')) {
+        return;
+      }
+      
+      // Count free tickets (including PHOTO as VIP)
+      if (order.order_category === 'GA') {
+        freeGA += quantity;
+      } else if (order.order_category === 'VIP' || order.order_category === 'PHOTO') {
+        freeVIP += quantity;
+      } else if (order.order_category === 'GUEST') {
+        if (itemName.includes('vip') || itemName.includes('side stage')) {
+          freeVIP += quantity;
+        } else {
+          freeGA += quantity;
+        }
+      }
+    }
+  });
+  
+  // Prepare complete sales data
   const salesData = {
     event_id: parseInt(eventId),
     sales_total_ga: paidGA > 0 ? paidGA : null,
     sales_total_vip: paidVIP > 0 ? paidVIP : null,
     sales_total_coatcheck: paidOUTLET > 0 ? paidOUTLET : null,
+    sales_total_comp_ga: compGA > 0 ? compGA : null,
+    sales_total_comp_vip: compVIP > 0 ? compVIP : null,
+    sales_total_free_ga: freeGA > 0 ? freeGA : null,
+    sales_total_free_vip: freeVIP > 0 ? freeVIP : null,
     sales_gross: totalGross > 0 ? totalGross : null,
     sales_net: totalNet > 0 ? totalNet : null
   };
@@ -205,7 +309,9 @@ async function saveSalesSummary(eventId) {
     await supabase
       .from("events_sales")
       .upsert(salesData, { onConflict: "event_id" });
-    console.log(`Sales summary: GA=${salesData.sales_total_ga}, VIP=${salesData.sales_total_vip}`);
+    
+    // Enhanced logging
+    console.log(`Sales summary: GA=${salesData.sales_total_ga}, VIP=${salesData.sales_total_vip}, CompGA=${salesData.sales_total_comp_ga}, CompVIP=${salesData.sales_total_comp_vip}, FreeGA=${salesData.sales_total_free_ga}, FreeVIP=${salesData.sales_total_free_vip}, Gross=${salesData.sales_gross}, Net=${salesData.sales_net}`);
   } catch (err) {
     console.error("Sales summary error:", err.message);
   }
