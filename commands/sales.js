@@ -118,7 +118,7 @@ async function showSalesReport(from, supabase, event, user) {
         }
         
         if (salesData.sales_gross) {
-            report += `   - Gross: ${formatCurrency(salesData.sales_gross)}\n`;
+            report += `\n   - Gross: ${formatCurrency(salesData.sales_gross)}\n`;
         }
         if (salesData.sales_net) {
             report += `   - Net: ${formatCurrency(salesData.sales_net)}\n`;
