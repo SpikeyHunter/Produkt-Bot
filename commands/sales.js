@@ -1,4 +1,4 @@
-// commands/sales.js - Fixed to properly handle template variables
+// commands/sales.js - Updated with complete sales report
 const { sendMessage } = require('../utils');
 const { format, toDate } = require('date-fns');
 const { utcToZonedTime } = require('date-fns-tz');
@@ -49,7 +49,7 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         
         if (!showAll) {
             const salesTemplatesForSelection = templates.get('sales');
-            message += salesTemplatesForSelection.askForSelection;
+            message += '\n' + salesTemplatesForSelection.askForSelection;
         }
 
         await sendMessage(from, message);
@@ -61,6 +61,11 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         await sendMessage(from, salesTemplates.fetchError);
         return null;
     }
+}
+
+function formatCurrency(amount) {
+    if (!amount || amount === 0) return null;
+    return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
 async function showSalesReport(from, supabase, event) {
@@ -77,37 +82,72 @@ async function showSalesReport(from, supabase, event) {
         return;
     }
 
-    const grossSales = (salesData.sales_gross || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
     const eventDate = toDate(new Date(event.event_date));
     const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
     const formattedDate = format(zonedDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
 
-    // Build report using templates with variables
-    const reportHeaderTemplate = templates.get('sales', {
-        eventId: event.event_id,
-        date: formattedDate,
-        name: eventName
-    });
+    // Build comprehensive sales report
+    let report = `*${event.event_id} - ${formattedDate} - ${eventName}*\n\n`;
 
-    const totalSalesTemplate = templates.get('sales', { amount: grossSales });
-    
-    const gaTemplate = templates.get('sales', { 
-        label: 'GA', 
-        value: salesData.sales_total_ga || 'N/A' 
-    });
-    
-    const vipTemplate = templates.get('sales', { 
-        label: 'VIP', 
-        value: salesData.sales_total_vip || 'N/A' 
-    });
-    
-    const coatcheckTemplate = templates.get('sales', { 
-        label: 'Coatcheck', 
-        value: salesData.sales_total_coatcheck || 'N/A' 
-    });
+    // Calculate totals
+    const totalSales = (salesData.sales_total_ga || 0) + (salesData.sales_total_vip || 0);
+    const totalComps = (salesData.sales_total_comp_ga || 0) + (salesData.sales_total_comp_vip || 0);
+    const totalFree = (salesData.sales_total_free_ga || 0) + (salesData.sales_total_free_vip || 0);
 
-    const report = `${reportHeaderTemplate.salesReportHeader}\n\n${totalSalesTemplate.totalSalesLine}\n${gaTemplate.salesReportLine}\n${vipTemplate.salesReportLine}\n${coatcheckTemplate.salesReportLine}`;
+    // Main sales section (always show if there are any sales)
+    if (totalSales > 0 || salesData.sales_gross || salesData.sales_net || salesData.sales_total_coatcheck) {
+        report += `*Total Sales:* ${totalSales}\n`;
+        
+        if (salesData.sales_total_ga) {
+            report += `   - GA: ${salesData.sales_total_ga}\n`;
+        }
+        if (salesData.sales_total_vip) {
+            report += `   - VIP: ${salesData.sales_total_vip}\n`;
+        }
+        if (salesData.sales_total_coatcheck) {
+            report += `   - Coatcheck: ${salesData.sales_total_coatcheck}\n`;
+        }
+        
+        if (salesData.sales_gross) {
+            report += `   - Gross: ${formatCurrency(salesData.sales_gross)}\n`;
+        }
+        if (salesData.sales_net) {
+            report += `   - Net: ${formatCurrency(salesData.sales_net)}\n`;
+        }
+    }
+
+    // Comps section (only show if there are comps)
+    if (totalComps > 0) {
+        report += `\n*Total Comps:* ${totalComps}\n`;
+        
+        if (salesData.sales_total_comp_ga) {
+            report += `   - Comp GA: ${salesData.sales_total_comp_ga}\n`;
+        }
+        if (salesData.sales_total_comp_vip) {
+            report += `   - Comp VIP: ${salesData.sales_total_comp_vip}\n`;
+        }
+    }
+
+    // Free tickets section (only show if there are free tickets)
+    if (totalFree > 0) {
+        report += `\n*Total Free Tickets:* ${totalFree}\n`;
+        
+        if (salesData.sales_total_free_ga) {
+            report += `   - Free GA: ${salesData.sales_total_free_ga}\n`;
+        }
+        if (salesData.sales_total_free_vip) {
+            report += `   - Free VIP: ${salesData.sales_total_free_vip}\n`;
+        }
+    }
+
+    // If no data at all
+    if (totalSales === 0 && totalComps === 0 && totalFree === 0 && !salesData.sales_gross && !salesData.sales_net && !salesData.sales_total_coatcheck) {
+        const salesTemplates = templates.get('sales');
+        await sendMessage(from, salesTemplates.noSalesData);
+        return;
+    }
+
     await sendMessage(from, report);
 }
 

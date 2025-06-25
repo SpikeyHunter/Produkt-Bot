@@ -3,19 +3,13 @@
   
   "noUpcomingEvents": "📅 *No Upcoming Events*\n\nThere are no upcoming events found at this time.",
   
-  "eventListHeader": "🎟️ *Upcoming Events* ({{count}})\n\nPlease select an event by typing its ID, Name, or Date.",
+  "eventListHeader": "🎟️ *Upcoming Events* ({{count}})\n\nPlease select an event by typing its ID, Name, or Date:",
   
-  "askForSelection": "\nType *All* to see all upcoming events.",
+  "askForSelection": "Type *all* to see all upcoming events or *cancel* to exit.",
   
   "selectionError": "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list, or type *cancel* to exit.",
   
-  "salesReportHeader": "*{{eventId}} - {{date}} - {{name}}*",
-  
   "salesCanceled": "✅ Sales command canceled.",
   
-  "noSalesData": "⚠️ Could not retrieve sales data for this event.",
-  
-  "totalSalesLine": "*Total Sales:* {{amount}}",
-  
-  "salesReportLine": "   - {{label}}: {{value}}"
+  "noSalesData": "⚠️ *No Sales Data*\n\nNo sales data is available for this event yet."
 }
