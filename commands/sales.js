@@ -1,7 +1,7 @@
-// commands/sales.js - Fixed with proper imports and user timezone
+// commands/sales.js - FIXED date-fns-tz import for v3.2.0
 const { sendMessage } = require('../utils');
 const { format } = require('date-fns');
-const { utcToZonedTime } = require('date-fns-tz');
+const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
 
 async function listUpcomingEvents(from, supabase, user, showAll = false) {
@@ -13,7 +13,7 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
         const userTimezone = user?.bot_user_timezone || 'America/New_York';
         
         const today = new Date();
-        const todayInUserTZ = utcToZonedTime(today, userTimezone);
+        const todayInUserTZ = toZonedTime(today, userTimezone);
         const todayDateString = format(todayInUserTZ, 'yyyy-MM-dd');
 
         let query = supabase
@@ -44,7 +44,7 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
         
         events.forEach(event => {
             const eventDate = new Date(event.event_date);
-            const zonedDate = utcToZonedTime(eventDate, userTimezone);
+            const zonedDate = toZonedTime(eventDate, userTimezone);
             const formattedDate = format(zonedDate, 'MMMM d');
             const eventName = event.event_name.split(',')[0];
             message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
@@ -88,7 +88,7 @@ async function showSalesReport(from, supabase, event, user) {
     // Use user's timezone for date formatting
     const userTimezone = user?.bot_user_timezone || 'America/New_York';
     const eventDate = new Date(event.event_date);
-    const zonedDate = utcToZonedTime(eventDate, userTimezone);
+    const zonedDate = toZonedTime(eventDate, userTimezone);
     const formattedDate = format(zonedDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
 
@@ -196,7 +196,7 @@ async function handleSales(from, text, salesState, supabase, user) {
         const selectedEvent = state.events.find(
             e => e.event_id.toString() === input ||
             e.event_name.toLowerCase().split(',')[0].includes(input) ||
-            format(utcToZonedTime(new Date(e.event_date), userTimezone), 'MMMM d').toLowerCase() === input
+            format(toZonedTime(new Date(e.event_date), userTimezone), 'MMMM d').toLowerCase() === input
         );
 
         if (selectedEvent) {
