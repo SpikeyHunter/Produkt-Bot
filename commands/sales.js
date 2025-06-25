@@ -1,5 +1,5 @@
-// commands/sales.js - OPTIMIZED with faster performance and navigation buttons
-const { sendMessage, sendMessageInstant } = require('../utils');
+// commands/sales.js - WITH REAL WhatsApp Interactive Buttons
+const { sendMessage, sendMessageInstant, sendMessageWithButtons } = require('../utils');
 const { format } = require('date-fns');
 const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
@@ -158,14 +158,29 @@ async function showSalesReport(from, supabase, event, user) {
     // Send the report
     await sendMessageInstant(from, report);
     
-    // Add navigation options with quick buttons
-    const navigationMessage = `\n🔄 *What would you like to do next?*\n\n` +
-                            `*1* - Check another event\n` +
-                            `*2* - Back to main menu\n` +
-                            `*3* - Exit\n\n` +
-                            `Type *1*, *2*, or *3* to continue.`;
-    
-    await sendMessageInstant(from, navigationMessage);
+    // 🔥 REAL WhatsApp Interactive Buttons!
+    const navigationButtons = [
+        {
+            id: "check_another",
+            title: "🔄 Another Event"
+        },
+        {
+            id: "main_menu", 
+            title: "📋 Main Menu"
+        },
+        {
+            id: "exit_sales",
+            title: "❌ Exit"
+        }
+    ];
+
+    await sendMessageWithButtons(
+        from,
+        "What would you like to do next?",
+        navigationButtons,
+        "🎯 Navigation Options", // Header
+        "Choose an option below" // Footer
+    );
 }
 
 async function handleSales(from, text, salesState, supabase, user) {
@@ -231,10 +246,10 @@ async function handleSales(from, text, salesState, supabase, user) {
         }
     }
     
-    // Handle navigation after showing sales report
+    // Handle navigation after showing sales report (including button responses)
     else if (state.step === 'navigation') {
         
-        if (input === '1' || input === 'another' || input === 'check another') {
+        if (input === '1' || input === 'another' || input === 'check another' || input === 'check_another') {
             // Go back to event selection
             console.log(`🔄 User ${from} wants to check another event`);
             const events = await listUpcomingEvents(from, supabase, user, true);
@@ -245,7 +260,7 @@ async function handleSales(from, text, salesState, supabase, user) {
             }
         }
         
-        else if (input === '2' || input === 'menu' || input === 'main menu' || input === 'help') {
+        else if (input === '2' || input === 'menu' || input === 'main menu' || input === 'help' || input === 'main_menu') {
             // Exit and show help
             delete salesState[from];
             await sendMessageInstant(from, "📋 *Returning to main menu...*");
@@ -255,15 +270,27 @@ async function handleSales(from, text, salesState, supabase, user) {
             await handleHelp(from, user);
         }
         
-        else if (input === '3' || input === 'exit' || input === 'cancel') {
+        else if (input === '3' || input === 'exit' || input === 'cancel' || input === 'exit_sales') {
             // Exit completely
             delete salesState[from];
             await sendMessageInstant(from, "✅ *Sales module closed.*\n\nType *help* to see available commands.");
         }
         
         else {
-            // Invalid navigation option
-            await sendMessageInstant(from, "❓ *Invalid Option*\n\nPlease type:\n*1* - Check another event\n*2* - Back to main menu\n*3* - Exit");
+            // Invalid navigation option - show buttons again
+            const navigationButtons = [
+                { id: "check_another", title: "🔄 Another Event" },
+                { id: "main_menu", title: "📋 Main Menu" },
+                { id: "exit_sales", title: "❌ Exit" }
+            ];
+
+            await sendMessageWithButtons(
+                from,
+                "Please choose one of the options below:",
+                navigationButtons,
+                "❓ Invalid Option",
+                "Use the buttons or type 1, 2, or 3"
+            );
         }
     }
 
