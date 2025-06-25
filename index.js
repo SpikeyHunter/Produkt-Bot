@@ -1,4 +1,4 @@
-// Enhanced index.js with timezone improvements
+// Enhanced index.js with timezone improvements - FIXED FLOW LOGIC
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -130,13 +130,13 @@ app.post('/webhook', async (req, res) => {
     const command = commandResult.command;
     const suggestion = commandResult.suggestion;
 
-    // Check for ongoing flows
+    // FIXED: Check for ongoing flows FIRST - before any command processing
     const isRegistering = registrationState[from];
     const isConfirming = confirmationState[from];
     const isHandlingSales = salesState[from];
     const isChangingTimezone = timezoneState[from];
 
-    // Handle ongoing flows
+    // Handle ongoing flows FIRST
     if (isRegistering) {
       registrationState = await handleRegister(from, text, registrationState, supabase);
       return res.sendStatus(200);
@@ -157,13 +157,14 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
     
-    // UPDATED: Handle unregistered users
+    // Handle unregistered users (except for register and help commands)
     if (!user && command !== 'register' && command !== 'help') {
       const generalTemplates = templates.get('general');
       await sendMessage(from, generalTemplates.welcomeUnregistered);
       return res.sendStatus(200);
     }
 
+    // FIXED: Only process new commands if NOT in any ongoing flow
     if (command) {
       const textParts = text.toLowerCase().trim().split(' ');
       const parameter = textParts.slice(1).join(' ');
@@ -217,6 +218,7 @@ app.post('/webhook', async (req, res) => {
             const generalTemplates = templates.get('general');
             await sendMessage(from, generalTemplates.welcomeUnregistered);
           } else {
+            console.log(`🔍 Starting sales flow for user ${from}`);
             salesState = await handleSales(from, text, salesState, supabase, user);
           }
           break;
@@ -227,6 +229,7 @@ app.post('/webhook', async (req, res) => {
             const generalTemplates = templates.get('general');
             await sendMessage(from, generalTemplates.welcomeUnregistered);
           } else {
+            console.log(`🌍 Starting timezone flow for user ${from}`);
             timezoneState = await handleTimezone(from, text, timezoneState, supabase, user);
           }
           break;
