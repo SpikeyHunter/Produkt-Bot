@@ -1,11 +1,14 @@
 // commands/sales.js - Updated with complete sales report
 const { sendMessage } = require('../utils');
-const { format, toDate } = require('date-fns');
+const { format } = require('date-fns');
 const { utcToZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
 
 async function listUpcomingEvents(from, supabase, showAll = false) {
     try {
+        // Show loading message immediately
+        await sendMessage(from, "🔄 *Fetching events...*\n\nPlease wait while I get the latest event information.");
+        
         const today = new Date();
         const todayInET = utcToZonedTime(today, 'America/New_York');
         const todayDateString = format(todayInET, 'yyyy-MM-dd');
@@ -25,13 +28,12 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         if (error) {
             console.error("Error fetching upcoming events:", error);
             const salesTemplates = templates.get('sales');
-            await sendMessage(from, salesTemplates.fetchError);
+            await sendMessage(from, "❌ *Database Error*\n\nI couldn't fetch the event list from our database. Please try again in a moment.");
             return null;
         }
 
         if (!events || events.length === 0) {
-            const salesTemplates = templates.get('sales');
-            await sendMessage(from, salesTemplates.noUpcomingEvents);
+            await sendMessage(from, "📅 *No Upcoming Events*\n\nThere are no upcoming events scheduled at this time.");
             return [];
         }
 
@@ -40,7 +42,7 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
         let message = salesTemplates.eventListHeader + '\n\n';
         
         events.forEach(event => {
-            const eventDate = toDate(new Date(event.event_date));
+            const eventDate = new Date(event.event_date);
             const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
             const formattedDate = format(zonedDate, 'MMMM d');
             const eventName = event.event_name.split(',')[0];
@@ -57,8 +59,7 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
 
     } catch (e) {
         console.error("Exception in listUpcomingEvents:", e);
-        const salesTemplates = templates.get('sales');
-        await sendMessage(from, salesTemplates.fetchError);
+        await sendMessage(from, "⚠️ *Connection Error*\n\nI'm having trouble connecting to our systems right now. Please try again in a few moments.");
         return null;
     }
 }
@@ -69,6 +70,9 @@ function formatCurrency(amount) {
 }
 
 async function showSalesReport(from, supabase, event) {
+    // Show loading message for sales report
+    await sendMessage(from, "📊 *Loading sales data...*\n\nRetrieving sales information for this event.");
+    
     const { data: salesData, error } = await supabase
         .from('events_sales')
         .select('*')
@@ -77,12 +81,11 @@ async function showSalesReport(from, supabase, event) {
 
     if (error || !salesData) {
         console.error("Error fetching sales data:", error);
-        const salesTemplates = templates.get('sales');
-        await sendMessage(from, salesTemplates.noSalesData);
+        await sendMessage(from, "⚠️ *No Sales Data*\n\nNo sales data is available for this event yet, or there was an error retrieving it.");
         return;
     }
 
-    const eventDate = toDate(new Date(event.event_date));
+    const eventDate = new Date(event.event_date);
     const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
     const formattedDate = format(zonedDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
@@ -143,8 +146,7 @@ async function showSalesReport(from, supabase, event) {
 
     // If no data at all
     if (totalSales === 0 && totalComps === 0 && totalFree === 0 && !salesData.sales_gross && !salesData.sales_net && !salesData.sales_total_coatcheck) {
-        const salesTemplates = templates.get('sales');
-        await sendMessage(from, salesTemplates.noSalesData);
+        await sendMessage(from, "📊 *No Sales Data*\n\nThis event doesn't have any sales data recorded yet.");
         return;
     }
 
@@ -171,8 +173,7 @@ async function handleSales(from, text, salesState, supabase, user) {
         
         if(input === 'cancel'){
             delete salesState[from];
-            const salesTemplates = templates.get('sales');
-            await sendMessage(from, salesTemplates.salesCanceled);
+            await sendMessage(from, "✅ *Sales lookup canceled.*");
             return salesState;
         }
         
@@ -190,15 +191,14 @@ async function handleSales(from, text, salesState, supabase, user) {
         const selectedEvent = state.events.find(
             e => e.event_id.toString() === input ||
             e.event_name.toLowerCase().split(',')[0].includes(input) ||
-            format(utcToZonedTime(toDate(new Date(e.event_date)), 'America/New_York'), 'MMMM d').toLowerCase() === input
+            format(utcToZonedTime(new Date(e.event_date), 'America/New_York'), 'MMMM d').toLowerCase() === input
         );
 
         if (selectedEvent) {
             await showSalesReport(from, supabase, selectedEvent);
             delete salesState[from]; // End of flow
         } else {
-            const salesTemplates = templates.get('sales');
-            await sendMessage(from, salesTemplates.selectionError);
+            await sendMessage(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list above.\n\nOr type *cancel* to exit.");
         }
     }
 
