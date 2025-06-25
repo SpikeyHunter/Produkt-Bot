@@ -1,4 +1,4 @@
-// utils.js - Updated with timezone command
+// utils.js - OPTIMIZED with reduced delays for better performance
 
 const axios = require('axios');
 
@@ -111,7 +111,7 @@ function parseCommandWithSuggestions(text, user = null) {
   
   const normalizedText = text.toLowerCase().trim();
   // Updated with timezone command
-  const validCommands = ['help', 'register', 'unregister', 'status', 'sales', 'timezone', 'list', 'cancel', 'yes', 'no'];
+  const validCommands = ['help', 'register', 'unregister', 'status', 'sales', 'timezone', 'list', 'cancel', 'yes', 'no', 'all', '1', '2', '3'];
   
   // Check for multi-word commands first
   if (normalizedText.startsWith('list ')) {
@@ -190,7 +190,7 @@ async function sendTypingIndicator(messageId) {
 }
 
 /**
- * Sends a WhatsApp message with natural delay for typing simulation
+ * OPTIMIZED: Sends a WhatsApp message with reduced delay for better performance
  * @param {string} to - The recipient's phone number
  * @param {string} text - The message body to send
  * @param {number} typingDuration - How long to show typing (milliseconds)
@@ -199,11 +199,11 @@ async function sendMessage(to, text, typingDuration = null) {
   const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
   
   try {
-    // Auto-calculate typing duration based on message length for natural feel
+    // OPTIMIZED: Reduced delays for better performance
     if (typingDuration === null) {
-      const baseTime = 500; // Reduced minimum time
+      const baseTime = 200; // Reduced from 500ms to 200ms
       const words = text.split(' ').length;
-      const calculatedTime = Math.min(1200, baseTime + (words * 40)); // 40ms per word, max 1.2s
+      const calculatedTime = Math.min(600, baseTime + (words * 20)); // 20ms per word, max 600ms (down from 1200ms)
       typingDuration = calculatedTime;
     }
 
@@ -361,16 +361,16 @@ function formatPhoneNumber(phoneNumber) {
 }
 
 module.exports = {
-  sendMessage,                     // Main function with auto-delay
-  sendMessageInstant,             // No delay
+  sendMessage,                     // OPTIMIZED: Reduced delays (200ms base, max 600ms)
+  sendMessageInstant,             // No delay - use for loading messages
   sendMessageWithTyping,          // Custom delay duration
   sendTypingIndicator,            // Official typing indicator
   markAsReadWithTyping,           // Mark as read + typing
   logIncomingMessageWithTyping,   // Enhanced logging with typing
   validateEnvironmentVariables,
   parseCommand,                   // Legacy function
-  parseCommandWithSuggestions,    // NEW: Enhanced parser with suggestions
-  findClosestCommand,             // NEW: Command suggestion finder
+  parseCommandWithSuggestions,    // Enhanced parser with suggestions
+  findClosestCommand,             // Command suggestion finder
   logIncomingMessage,
   sanitizeInput,
   formatPhoneNumber

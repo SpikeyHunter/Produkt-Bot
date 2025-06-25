@@ -1,13 +1,13 @@
-// commands/sales.js - FIXED date-fns-tz import for v3.2.0
-const { sendMessage } = require('../utils');
+// commands/sales.js - OPTIMIZED with faster performance and navigation buttons
+const { sendMessage, sendMessageInstant } = require('../utils');
 const { format } = require('date-fns');
 const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
 
 async function listUpcomingEvents(from, supabase, user, showAll = false) {
     try {
-        // Show loading message immediately
-        await sendMessage(from, "🔄 *Fetching events...*\n\nPlease wait while I get the latest event information.");
+        // Show loading message immediately (no delay)
+        await sendMessageInstant(from, "🔄 *Fetching events...*\n\nPlease wait while I get the latest event information.");
         
         // Use user's timezone or default to Eastern
         const userTimezone = user?.bot_user_timezone || 'America/New_York';
@@ -52,9 +52,12 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
         
         if (!showAll) {
             message += '\nType *all* to see all upcoming events or *cancel* to exit.';
+        } else {
+            message += '\nType *cancel* to exit.';
         }
 
-        await sendMessage(from, message);
+        // Send instantly (no artificial delay)
+        await sendMessageInstant(from, message);
         return events;
 
     } catch (e) {
@@ -70,8 +73,8 @@ function formatCurrency(amount) {
 }
 
 async function showSalesReport(from, supabase, event, user) {
-    // Show loading message for sales report
-    await sendMessage(from, "📊 *Loading sales data...*\n\nRetrieving sales information for this event.");
+    // Show loading message for sales report (instant)
+    await sendMessageInstant(from, "📊 *Loading sales data...*\n\nRetrieving sales information for this event.");
     
     const { data: salesData, error } = await supabase
         .from('events_sales')
@@ -93,7 +96,7 @@ async function showSalesReport(from, supabase, event, user) {
     const eventName = event.event_name.split(',')[0];
 
     // Build comprehensive sales report
-    let report = `*${event.event_id} - ${formattedDate} - ${eventName}*\n\n`;
+    let report = `📊 *SALES REPORT*\n\n*${event.event_id} - ${formattedDate} - ${eventName}*\n\n`;
 
     // Calculate totals
     const totalSales = (salesData.sales_total_ga || 0) + (salesData.sales_total_vip || 0);
@@ -152,15 +155,27 @@ async function showSalesReport(from, supabase, event, user) {
         return;
     }
 
-    await sendMessage(from, report);
+    // Send the report
+    await sendMessageInstant(from, report);
+    
+    // Add navigation options with quick buttons
+    const navigationMessage = `\n🔄 *What would you like to do next?*\n\n` +
+                            `*1* - Check another event\n` +
+                            `*2* - Back to main menu\n` +
+                            `*3* - Exit\n\n` +
+                            `Type *1*, *2*, or *3* to continue.`;
+    
+    await sendMessageInstant(from, navigationMessage);
 }
 
 async function handleSales(from, text, salesState, supabase, user) {
+    // Handle when user is not in sales flow
     if (!salesState[from]) {
         // Start of the flow
+        console.log(`🔍 Starting sales flow for user ${from}`);
         const events = await listUpcomingEvents(from, supabase, user);
         if (events && events.length > 0) {
-            salesState[from] = { step: 1, events };
+            salesState[from] = { step: 'selecting_event', events };
         } else {
              // If no events, or an error occurred, end the flow
             delete salesState[from];
@@ -169,22 +184,24 @@ async function handleSales(from, text, salesState, supabase, user) {
     }
 
     const state = salesState[from];
+    const input = text.trim().toLowerCase();
 
-    if (state.step === 1) {
-        const input = text.trim().toLowerCase();
+    // Handle different steps in the sales flow
+    if (state.step === 'selecting_event') {
         
-        if(input === 'cancel'){
+        if (input === 'cancel') {
             delete salesState[from];
-            await sendMessage(from, "✅ *Sales lookup canceled.*");
+            await sendMessageInstant(from, "✅ *Sales lookup canceled.*");
             return salesState;
         }
         
         if (input === 'all') {
+            console.log(`🔍 User ${from} requested all events`);
             const allEvents = await listUpcomingEvents(from, supabase, user, true);
             if (allEvents && allEvents.length > 0) {
-                 salesState[from] = { step: 1, events: allEvents };
+                salesState[from] = { step: 'selecting_event', events: allEvents };
             } else {
-                 delete salesState[from];
+                delete salesState[from];
             }
             return salesState;
         }
@@ -200,10 +217,53 @@ async function handleSales(from, text, salesState, supabase, user) {
         );
 
         if (selectedEvent) {
+            console.log(`🎯 User ${from} selected event: ${selectedEvent.event_name}`);
             await showSalesReport(from, supabase, selectedEvent, user);
-            delete salesState[from]; // End of flow
+            
+            // Move to navigation step
+            salesState[from] = { 
+                step: 'navigation', 
+                events: state.events,
+                lastEvent: selectedEvent 
+            };
         } else {
-            await sendMessage(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list above.\n\nOr type *cancel* to exit.");
+            await sendMessageInstant(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list above.\n\nOr type *cancel* to exit.");
+        }
+    }
+    
+    // Handle navigation after showing sales report
+    else if (state.step === 'navigation') {
+        
+        if (input === '1' || input === 'another' || input === 'check another') {
+            // Go back to event selection
+            console.log(`🔄 User ${from} wants to check another event`);
+            const events = await listUpcomingEvents(from, supabase, user, true);
+            if (events && events.length > 0) {
+                salesState[from] = { step: 'selecting_event', events };
+            } else {
+                delete salesState[from];
+            }
+        }
+        
+        else if (input === '2' || input === 'menu' || input === 'main menu' || input === 'help') {
+            // Exit and show help
+            delete salesState[from];
+            await sendMessageInstant(from, "📋 *Returning to main menu...*");
+            
+            // Import help handler and show help menu
+            const handleHelp = require('./help');
+            await handleHelp(from, user);
+        }
+        
+        else if (input === '3' || input === 'exit' || input === 'cancel') {
+            // Exit completely
+            delete salesState[from];
+            await sendMessageInstant(from, "✅ *Sales module closed.*\n\nType *help* to see available commands.");
+        }
+        
+        else {
+            // Invalid navigation option
+            await sendMessageInstant(from, "❓ *Invalid Option*\n\nPlease type:\n*1* - Check another event\n*2* - Back to main menu\n*3* - Exit");
         }
     }
 
