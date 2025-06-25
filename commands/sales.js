@@ -1,5 +1,5 @@
-// commands/sales.js - WITH REAL WhatsApp Interactive Buttons
-const { sendMessage, sendMessageInstant, sendMessageWithButtons } = require('../utils');
+// commands/sales.js - Simple Yes/No navigation (no buttons)
+const { sendMessage, sendMessageInstant } = require('../utils');
 const { format } = require('date-fns');
 const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
@@ -155,32 +155,14 @@ async function showSalesReport(from, supabase, event, user) {
         return;
     }
 
-    // Send the report
+    // Send the report instantly
     await sendMessageInstant(from, report);
     
-    // 🔥 REAL WhatsApp Interactive Buttons!
-    const navigationButtons = [
-        {
-            id: "check_another",
-            title: "🔄 Another Event"
-        },
-        {
-            id: "main_menu", 
-            title: "📋 Main Menu"
-        },
-        {
-            id: "exit_sales",
-            title: "❌ Exit"
-        }
-    ];
-
-    await sendMessageWithButtons(
-        from,
-        "What would you like to do next?",
-        navigationButtons,
-        "🎯 Navigation Options", // Header
-        "Choose an option below" // Footer
-    );
+    // 💭 Add a natural pause with typing animation before asking the question
+    await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second pause
+    
+    // Ask if they want to check another event with typing animation
+    await sendMessage(from, "🔄 *Would you like to check another event?*\n\nType *yes* to see more events or *no* to exit.", 800);
 }
 
 async function handleSales(from, text, salesState, supabase, user) {
@@ -235,9 +217,9 @@ async function handleSales(from, text, salesState, supabase, user) {
             console.log(`🎯 User ${from} selected event: ${selectedEvent.event_name}`);
             await showSalesReport(from, supabase, selectedEvent, user);
             
-            // Move to navigation step
+            // Move to yes/no question step
             salesState[from] = { 
-                step: 'navigation', 
+                step: 'asking_continue', 
                 events: state.events,
                 lastEvent: selectedEvent 
             };
@@ -246,11 +228,11 @@ async function handleSales(from, text, salesState, supabase, user) {
         }
     }
     
-    // Handle navigation after showing sales report (including button responses)
-    else if (state.step === 'navigation') {
+    // Handle yes/no response
+    else if (state.step === 'asking_continue') {
         
-        if (input === '1' || input === 'another' || input === 'check another' || input === 'check_another') {
-            // Go back to event selection
+        if (input === 'yes' || input === 'y' || input === 'yeah' || input === 'yep' || input === 'sure' || input === 'ok') {
+            // User wants to check another event
             console.log(`🔄 User ${from} wants to check another event`);
             const events = await listUpcomingEvents(from, supabase, user, true);
             if (events && events.length > 0) {
@@ -260,37 +242,15 @@ async function handleSales(from, text, salesState, supabase, user) {
             }
         }
         
-        else if (input === '2' || input === 'menu' || input === 'main menu' || input === 'help' || input === 'main_menu') {
-            // Exit and show help
+        else if (input === 'no' || input === 'n' || input === 'nope' || input === 'exit' || input === 'cancel' || input === 'done') {
+            // User wants to exit
             delete salesState[from];
-            await sendMessageInstant(from, "📋 *Returning to main menu...*");
-            
-            // Import help handler and show help menu
-            const handleHelp = require('./help');
-            await handleHelp(from, user);
-        }
-        
-        else if (input === '3' || input === 'exit' || input === 'cancel' || input === 'exit_sales') {
-            // Exit completely
-            delete salesState[from];
-            await sendMessageInstant(from, "✅ *Sales module closed.*\n\nType *help* to see available commands.");
+            await sendMessage(from, "✅ *Thanks for using the sales module!*\n\nType *help* to see other available commands.", 400);
         }
         
         else {
-            // Invalid navigation option - show buttons again
-            const navigationButtons = [
-                { id: "check_another", title: "🔄 Another Event" },
-                { id: "main_menu", title: "📋 Main Menu" },
-                { id: "exit_sales", title: "❌ Exit" }
-            ];
-
-            await sendMessageWithButtons(
-                from,
-                "Please choose one of the options below:",
-                navigationButtons,
-                "❓ Invalid Option",
-                "Use the buttons or type 1, 2, or 3"
-            );
+            // Invalid response - ask again with typing animation
+            await sendMessage(from, "❓ *Please respond with yes or no*\n\nType *yes* to check another event or *no* to exit.", 600);
         }
     }
 
