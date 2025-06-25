@@ -1,0 +1,13 @@
+{
+  "prompt": "🌍 *Change Your Timezone*\n\nYour current timezone is: *{{currentTimezone}}*\n\nPlease choose your new timezone:\n\n*1* - Montreal (Eastern Time)\n*2* - Los Angeles (Pacific Time)\n*3* - Other (UTC)\n\nType the number of your choice, or type *cancel* to keep your current setting.",
+  
+  "success": "✅ *Timezone Updated!*\n\nYour timezone has been changed from *{{oldTimezone}}* to *{{timezone}}*.\n\nAll event times will now be displayed in your new timezone.",
+  
+  "unchanged": "ℹ️ *No Change*\n\nYou've selected *{{timezone}}*, which is already your current timezone setting.\n\nNo changes were made.",
+  
+  "invalid": "❌ *Invalid Choice*\n\nPlease enter *1* for Montreal, *2* for Los Angeles, or *3* for Other/UTC.\n\nOr type *cancel* to keep your current timezone.",
+  
+  "failed": "⚠️ *Update Failed*\n\nSorry, I couldn't update your timezone due to a technical issue. Please try again later.",
+  
+  "canceled": "❌ *Timezone Change Canceled*\n\nYour timezone setting remains unchanged."
+}

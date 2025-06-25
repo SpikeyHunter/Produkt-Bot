@@ -1,4 +1,4 @@
-// Enhanced index.js with timezone improvements - FIXED FLOW LOGIC
+// Enhanced index.js with FIXED webhook filtering to prevent random messages
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -61,8 +61,8 @@ app.get('/', (req, res) => {
     status: 'healthy',
     message: 'Produkt Bot server is running!',
     timestamp: new Date().toISOString(),
-    version: '2.1.0',
-    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support']
+    version: '2.1.1',
+    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support', 'webhook_filtering']
   });
 });
 
@@ -81,23 +81,66 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// Enhanced webhook handler
+// FIXED: Enhanced webhook handler with proper filtering
 app.post('/webhook', async (req, res) => {
   try {
-    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    // STEP 1: Validate webhook structure
+    const entry = req.body.entry?.[0];
+    if (!entry) {
+      console.log('🔍 Webhook: No entry found, ignoring');
+      return res.sendStatus(200);
+    }
+
+    const changes = entry.changes?.[0];
+    if (!changes) {
+      console.log('🔍 Webhook: No changes found, ignoring');
+      return res.sendStatus(200);
+    }
+
+    const value = changes.value;
+    if (!value) {
+      console.log('🔍 Webhook: No value found, ignoring');
+      return res.sendStatus(200);
+    }
+
+    // STEP 2: Check if this is a message event (not status update)
+    if (!value.messages || !Array.isArray(value.messages) || value.messages.length === 0) {
+      console.log('🔍 Webhook: No messages array or empty, likely status update - ignoring');
+      return res.sendStatus(200);
+    }
+
+    const message = value.messages[0];
     
-    // Validate message structure
-    if (!message || message.type !== 'text') {
+    // STEP 3: Validate message structure and type
+    if (!message || !message.from || !message.id) {
+      console.log('🔍 Webhook: Invalid message structure, ignoring');
+      return res.sendStatus(200);
+    }
+
+    // STEP 4: Only process text messages
+    if (message.type !== 'text') {
+      console.log(`🔍 Webhook: Non-text message type (${message.type}), ignoring`);
+      return res.sendStatus(200);
+    }
+
+    // STEP 5: Validate text content
+    const text = message.text?.body?.trim();
+    if (!text || text.length === 0) {
+      console.log('🔍 Webhook: Empty text message, ignoring');
       return res.sendStatus(200);
     }
 
     const from = message.from;
-    const text = message.text?.body?.trim();
     const messageId = message.id;
     
-    if (!text || from === process.env.PHONE_NUMBER_ID) {
+    // STEP 6: Ignore messages from the bot itself
+    if (from === process.env.PHONE_NUMBER_ID) {
+      console.log('🔍 Webhook: Message from bot itself, ignoring');
       return res.sendStatus(200);
     }
+
+    // STEP 7: Log that we're processing a valid message
+    console.log(`📩 Processing valid message from ${from}: "${text}"`);
 
     // Rate limiting check
     const rateCheck = rateLimiter.isAllowed(from);
