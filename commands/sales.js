@@ -1,17 +1,20 @@
-// commands/sales.js - Fixed imports
+// commands/sales.js - Fixed with proper imports and user timezone
 const { sendMessage } = require('../utils');
 const { format } = require('date-fns');
 const { utcToZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
 
-async function listUpcomingEvents(from, supabase, showAll = false) {
+async function listUpcomingEvents(from, supabase, user, showAll = false) {
     try {
         // Show loading message immediately
         await sendMessage(from, "🔄 *Fetching events...*\n\nPlease wait while I get the latest event information.");
         
+        // Use user's timezone or default to Eastern
+        const userTimezone = user?.bot_user_timezone || 'America/New_York';
+        
         const today = new Date();
-        const todayInET = utcToZonedTime(today, 'America/New_York');
-        const todayDateString = format(todayInET, 'yyyy-MM-dd');
+        const todayInUserTZ = utcToZonedTime(today, userTimezone);
+        const todayDateString = format(todayInUserTZ, 'yyyy-MM-dd');
 
         let query = supabase
             .from('events')
@@ -36,12 +39,12 @@ async function listUpcomingEvents(from, supabase, showAll = false) {
             return [];
         }
 
-        // Build message using templates with variables
+        // Build message using user's timezone
         let message = `🎟️ *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
         
         events.forEach(event => {
             const eventDate = new Date(event.event_date);
-            const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
+            const zonedDate = utcToZonedTime(eventDate, userTimezone);
             const formattedDate = format(zonedDate, 'MMMM d');
             const eventName = event.event_name.split(',')[0];
             message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
@@ -66,7 +69,7 @@ function formatCurrency(amount) {
     return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-async function showSalesReport(from, supabase, event) {
+async function showSalesReport(from, supabase, event, user) {
     // Show loading message for sales report
     await sendMessage(from, "📊 *Loading sales data...*\n\nRetrieving sales information for this event.");
     
@@ -82,8 +85,10 @@ async function showSalesReport(from, supabase, event) {
         return;
     }
 
+    // Use user's timezone for date formatting
+    const userTimezone = user?.bot_user_timezone || 'America/New_York';
     const eventDate = new Date(event.event_date);
-    const zonedDate = utcToZonedTime(eventDate, 'America/New_York');
+    const zonedDate = utcToZonedTime(eventDate, userTimezone);
     const formattedDate = format(zonedDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
 
@@ -153,7 +158,7 @@ async function showSalesReport(from, supabase, event) {
 async function handleSales(from, text, salesState, supabase, user) {
     if (!salesState[from]) {
         // Start of the flow
-        const events = await listUpcomingEvents(from, supabase);
+        const events = await listUpcomingEvents(from, supabase, user);
         if (events && events.length > 0) {
             salesState[from] = { step: 1, events };
         } else {
@@ -175,7 +180,7 @@ async function handleSales(from, text, salesState, supabase, user) {
         }
         
         if (input === 'all') {
-            const allEvents = await listUpcomingEvents(from, supabase, true);
+            const allEvents = await listUpcomingEvents(from, supabase, user, true);
             if (allEvents && allEvents.length > 0) {
                  salesState[from] = { step: 1, events: allEvents };
             } else {
@@ -184,15 +189,18 @@ async function handleSales(from, text, salesState, supabase, user) {
             return salesState;
         }
 
+        // Use user's timezone for date comparison
+        const userTimezone = user?.bot_user_timezone || 'America/New_York';
+
         // Find the selected event
         const selectedEvent = state.events.find(
             e => e.event_id.toString() === input ||
             e.event_name.toLowerCase().split(',')[0].includes(input) ||
-            format(utcToZonedTime(new Date(e.event_date), 'America/New_York'), 'MMMM d').toLowerCase() === input
+            format(utcToZonedTime(new Date(e.event_date), userTimezone), 'MMMM d').toLowerCase() === input
         );
 
         if (selectedEvent) {
-            await showSalesReport(from, supabase, selectedEvent);
+            await showSalesReport(from, supabase, selectedEvent, user);
             delete salesState[from]; // End of flow
         } else {
             await sendMessage(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list above.\n\nOr type *cancel* to exit.");

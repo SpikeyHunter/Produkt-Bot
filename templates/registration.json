@@ -1,11 +1,15 @@
 {
-  "welcome": "📝 *Registration Process Started!*\n\nI'm here to help you get started. Let's begin your registration process.\n\n✍️ *Step 1 of 2*\nWhat name would you like me to call you?",
+  "welcome": "📝 *Registration Process Started!*\n\nI'm here to help you get started. Let's begin your registration process.\n\n✍️ *Step 1 of 3*\nWhat name would you like me to call you?",
   
-  "step2": "✅ Nice to meet you, *{{name}}*!\n\n✍️ *Step 2 of 2*\nPlease enter your registration password to complete the setup.",
+  "step2": "✅ Nice to meet you, *{{name}}*!\n\n🔐 *Step 2 of 3*\nPlease enter your registration password to complete the setup.",
   
-  "success": "📝 *Registration Complete!*\n\nWelcome aboard, *{{name}}*!\nYou're now registered as a *{{role}}*.\n\nType *help* to explore what you can do!",
+  "step3": "🌍 *Step 3 of 3 - Timezone Selection*\n\nTo show you event times correctly, please choose your timezone:\n\n*1* - Montreal (Eastern Time)\n*2* - Los Angeles (Pacific Time)\n*3* - Other (UTC)\n\nType the number of your choice, or type *cancel* to stop registration.",
+  
+  "success": "🎉 *Registration Complete!*\n\nWelcome aboard, *{{name}}*!\nYou're now registered as a *{{role}}* user.\nYour timezone is set to *{{timezone}}*.\n\nType *help* to explore what you can do!",
   
   "wrongPassword": "❌ *Incorrect Password*\n\nThe password you entered is not valid. Please try again, or type *cancel* to stop the registration process.",
+  
+  "invalidTimezone": "❌ *Invalid Timezone Choice*\n\nPlease enter *1* for Montreal, *2* for Los Angeles, or *3* for Other/UTC.\n\nOr type *cancel* to stop registration.",
   
   "failed": "⚠️ *Registration Failed*\n\nSorry, I couldn't save your registration due to a technical issue. Please try again later or contact support.",
   

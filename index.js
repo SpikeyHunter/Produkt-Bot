@@ -1,4 +1,4 @@
-// Enhanced index.js with improvements
+// Enhanced index.js with timezone improvements
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -19,6 +19,7 @@ const handleStatus = require('./commands/status');
 const handleUnregister = require('./commands/unregister');
 const handleListUsers = require('./commands/listUsers');
 const handleSales = require('./commands/sales');
+const handleTimezone = require('./commands/timezone');
 
 // Import new modules
 const rateLimiter = require('./middleware/rateLimiter');
@@ -41,6 +42,7 @@ const PORT = process.env.PORT || 3000;
 let registrationState = {};
 let confirmationState = {};
 let salesState = {};
+let timezoneState = {};
 
 // Service clients
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -60,7 +62,7 @@ app.get('/', (req, res) => {
     message: 'Produkt Bot server is running!',
     timestamp: new Date().toISOString(),
     version: '2.1.0',
-    features: ['rate_limiting', 'templates', 'enhanced_logging']
+    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support']
   });
 });
 
@@ -132,6 +134,7 @@ app.post('/webhook', async (req, res) => {
     const isRegistering = registrationState[from];
     const isConfirming = confirmationState[from];
     const isHandlingSales = salesState[from];
+    const isChangingTimezone = timezoneState[from];
 
     // Handle ongoing flows
     if (isRegistering) {
@@ -146,6 +149,11 @@ app.post('/webhook', async (req, res) => {
 
     if (isHandlingSales) {
       salesState = await handleSales(from, text, salesState, supabase, user);
+      return res.sendStatus(200);
+    }
+
+    if (isChangingTimezone) {
+      timezoneState = await handleTimezone(from, text, timezoneState, supabase, user);
       return res.sendStatus(200);
     }
     
@@ -210,6 +218,16 @@ app.post('/webhook', async (req, res) => {
             await sendMessage(from, generalTemplates.welcomeUnregistered);
           } else {
             salesState = await handleSales(from, text, salesState, supabase, user);
+          }
+          break;
+
+        case 'timezone':
+          // Only allow if user is registered
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            timezoneState = await handleTimezone(from, text, timezoneState, supabase, user);
           }
           break;
 
@@ -278,6 +296,11 @@ app.get('/api/stats', async (req, res) => {
         admins: users.filter(u => u.bot_userrole === 'ADMIN').length,
         regular: users.filter(u => u.bot_userrole === 'USER').length
       },
+      timezones: {
+        montreal: users.filter(u => u.bot_user_timezone === 'America/New_York').length,
+        la: users.filter(u => u.bot_user_timezone === 'America/Los_Angeles').length,
+        utc: users.filter(u => u.bot_user_timezone === 'UTC').length
+      },
       rateLimiting: rateLimitStats,
       templates: {
         loaded: templates.list().length,
@@ -331,7 +354,7 @@ database.testConnection()
 app.listen(PORT, () => {
   console.log(`🚀 Enhanced Produkt Bot server running on port ${PORT}`);
   console.log(`✅ Server started at ${new Date().toISOString()}`);
-  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging`);
+  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging, Timezone Support`);
   console.log(`📋 Templates loaded: ${templates.list().length}`);
 });
 
