@@ -1,4 +1,4 @@
-// utils.js - Utility functions for the WhatsApp bot
+// utils.js - Fixed to include sales command
 
 const axios = require('axios');
 
@@ -43,7 +43,7 @@ function getEditDistance(a, b) {
  * @returns {object} { suggestion: string, confidence: number, message: string }
  */
 function findClosestCommand(input, user = null) {
-  const baseCommands = ['help', 'register', 'unregister', 'status'];
+  const baseCommands = ['help', 'register', 'unregister', 'status', 'sales'];
   const adminCommands = user?.bot_userrole === 'ADMIN' ? ['list users'] : [];
   const allCommands = [...baseCommands, ...adminCommands];
   
@@ -110,7 +110,8 @@ function parseCommandWithSuggestions(text, user = null) {
   if (!text) return { command: null, suggestion: null };
   
   const normalizedText = text.toLowerCase().trim();
-  const validCommands = ['help', 'register', 'unregister', 'status', 'list', 'cancel', 'yes', 'no'];
+  // FIXED: Added 'sales' to validCommands
+  const validCommands = ['help', 'register', 'unregister', 'status', 'sales', 'list', 'cancel', 'yes', 'no'];
   
   // Check for multi-word commands first
   if (normalizedText.startsWith('list ')) {
