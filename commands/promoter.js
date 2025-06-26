@@ -192,7 +192,8 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       promoterState[from].events = events;
       
       // Format event list in compact style
-      let eventList = `🎫 *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
+      const promoterTemplates = templates.get('promoter');
+      let eventList = promoterTemplates.eventListHeader.replace('{{count}}', events.length) + '\n\n';
       
       events.forEach(event => {
         const eventDate = new Date(event.event_date).toLocaleDateString('en-US', {
@@ -203,7 +204,7 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
         eventList += `${event.event_id} - ${eventDate} - ${event.event_name}\n`;
       });
       
-      eventList += `Type *all* to see all upcoming events or *cancel* to exit.`;
+      eventList += `\n${promoterTemplates.askForSelection}`;
       
       await sendMessage(from, eventList);
       return promoterState;
@@ -221,6 +222,7 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       if (text.toLowerCase() === 'all') {
         // Show all events again in compact format
         const events = promoterState[from].events;
+        const promoterTemplates = templates.get('promoter');
         let eventList = `🎫 *All Upcoming Events* (${events.length})\n\n`;
         
         events.forEach(event => {
@@ -356,34 +358,26 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       console.log(`Found promoters: ${Array.from(foundPromoters).join(', ')}`);
 
       if (csvData.length === 0) {
-        // Better error message showing what was actually found
+        // Enhanced debug message showing complete order structure
+        const promoterTemplates = templates.get('promoter');
         let debugMessage = `🔍 *Debug Info:*\n\n`;
         debugMessage += `Found ${orders.length} orders in database:\n`;
-        orders.forEach(order => {
-          debugMessage += `• ${order.order_sales_item_name}\n`;
+        orders.forEach((order, index) => {
+          debugMessage += `• Order ${index + 1}: ${order.order_sales_item_name}\n`;
+          debugMessage += `  - Columns: ${Object.keys(order).join(', ')}\n`;
+          if (order.order_serials !== undefined) {
+            debugMessage += `  - order_serials: ${typeof order.order_serials} (${order.order_serials === null ? 'null' : 'has value'})\n`;
+          }
         });
-        debugMessage += `\nExpected promoter names:\n`;
-        Object.keys(PROMOTER_MAPPINGS).forEach(name => {
-          debugMessage += `• ${name}\n`;
-        });
-        await sendMessage(from, debugMessage);
         
-        const promoterTemplates = templates.get('promoter');
+        await sendMessage(from, debugMessage);
         await sendMessage(from, promoterTemplates.noPromoterData);
         delete promoterState[from];
         return promoterState;
       }
 
-      // Create summary message
-      const foundPromotersList = Array.from(foundPromoters).sort();
-      let summaryMessage = `🎫 *Promoter Tickets Found:*\n\n`;
-      foundPromotersList.forEach(promoter => {
-        const count = csvData.filter(row => row[1] === promoter).length;
-        summaryMessage += `• ${promoter}: ${count} tickets\n`;
-      });
-      summaryMessage += `\nTotal: ${csvData.length} tickets\n`;
-      
-      await sendMessage(from, summaryMessage);
+      // Show typing indicator while generating file
+      console.log('📊 Generating CSV file...');
 
       // Create CSV content
       const csvHeader = 'Serial Number,Promoter\n';
@@ -414,9 +408,7 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
         const mediaId = await uploadMediaToWhatsApp(tempFilePath, filename);
         console.log(`✅ Media uploaded successfully: ${mediaId}`);
 
-        const caption = `📋 Promoter ticket list for ${selectedEvent.event_name}\n\n${foundPromotersList.map(p => `• ${p}: ${csvData.filter(row => row[1] === p).length} tickets`).join('\n')}\n\nTotal: ${csvData.length} tickets`;
-        
-        await sendDocument(from, mediaId, filename, caption);
+        await sendDocument(from, mediaId, filename, "Your file is ready!");
         console.log('✅ CSV file sent successfully');
 
         // Clean up temporary file

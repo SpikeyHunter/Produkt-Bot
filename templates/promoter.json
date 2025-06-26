@@ -3,7 +3,7 @@
   
   "noUpcomingEvents": "📅 *No Upcoming Events*\n\nThere are no upcoming events found at this time.",
   
-  "eventListHeader": "🎫 *Upcoming Events* ({{count}})\n\nPlease select an event by typing its ID, Name, or Date:",
+  "eventListHeader": "🎟️ *Upcoming Events* ({{count}})\n\nPlease select an event by typing its ID, Name, or Date:",
   
   "askForSelection": "Type *all* to see all upcoming events or *cancel* to exit.",
   
