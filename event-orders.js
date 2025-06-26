@@ -92,6 +92,27 @@ function transformOrders(orders, eventId) {
     if (!order.sale_items?.length) continue;
     
     for (const item of order.sale_items) {
+      // FIXED: Extract serial numbers (this was missing!)
+      let serials = null;
+      if (item.tickets?.length) {
+        const serialNumbers = item.tickets
+          .map(t => t.serial_number)
+          .filter(s => s && s.trim());
+        if (serialNumbers.length > 0) {
+          serials = JSON.stringify(serialNumbers);
+        }
+      }
+      
+      // Add logging for promoter orders to debug
+      if (item.name && item.name.includes('Promoter')) {
+        console.log(`🎫 PROMOTER ORDER FOUND:`, {
+          item_name: item.name,
+          serials: serials,
+          tickets: item.tickets ? item.tickets.length : 0,
+          ticket_details: item.tickets
+        });
+      }
+      
       transformed.push({
         event_id: parseInt(eventId),
         order_sale_id: item.sale_id || null,
@@ -99,7 +120,7 @@ function transformOrders(orders, eventId) {
         order_category: item.category || null,
         order_quantity: item.quantity || null,
         order_sales_item_name: item.name || null,
-        order_serials: null,
+        order_serials: serials, // FIXED: Now properly extracts serials
         order_name: order.order_id || null,
         order_gross: item.total || null,
         order_net: item.net || null,
