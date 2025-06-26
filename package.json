@@ -12,9 +12,12 @@
     "@supabase/supabase-js": "^2.43.4",
     "axios": "^1.7.2",
     "body-parser": "^1.20.2",
+    "crypto": "^1.0.1",
+    "crypto-js": "^4.2.0",
+    "csv-writer": "^1.6.0",
     "date-fns": "^3.2.0",
     "date-fns-tz": "^3.2.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.5.0",
     "express": "^4.19.2"
   },
   "devDependencies": {

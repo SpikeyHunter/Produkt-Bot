@@ -20,6 +20,7 @@ const handleUnregister = require('./commands/unregister');
 const handleListUsers = require('./commands/listUsers');
 const handleSales = require('./commands/sales');
 const handleTimezone = require('./commands/timezone');
+const handlePromoter = require('./commands/promoter');
 
 // Import new modules
 const rateLimiter = require('./middleware/rateLimiter');
@@ -43,6 +44,7 @@ let registrationState = {};
 let confirmationState = {};
 let salesState = {};
 let timezoneState = {};
+let promoterState = {};
 
 // Service clients
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -62,7 +64,7 @@ app.get('/', (req, res) => {
     message: 'Produkt Bot server is running!',
     timestamp: new Date().toISOString(),
     version: '2.1.1',
-    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support', 'webhook_filtering']
+    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support', 'webhook_filtering', 'promoter_tracking']
   });
 });
 
@@ -178,6 +180,7 @@ app.post('/webhook', async (req, res) => {
     const isConfirming = confirmationState[from];
     const isHandlingSales = salesState[from];
     const isChangingTimezone = timezoneState[from];
+    const isHandlingPromoter = promoterState[from];
 
     // Handle ongoing flows FIRST
     if (isRegistering) {
@@ -197,6 +200,11 @@ app.post('/webhook', async (req, res) => {
 
     if (isChangingTimezone) {
       timezoneState = await handleTimezone(from, text, timezoneState, supabase, user);
+      return res.sendStatus(200);
+    }
+
+    if (isHandlingPromoter) {
+      promoterState = await handlePromoter(from, text, promoterState, supabase, user);
       return res.sendStatus(200);
     }
     
@@ -274,6 +282,17 @@ app.post('/webhook', async (req, res) => {
           } else {
             console.log(`🌍 Starting timezone flow for user ${from}`);
             timezoneState = await handleTimezone(from, text, timezoneState, supabase, user);
+          }
+          break;
+
+        case 'promoter':
+          // Only allow if user is registered
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            console.log(`🎫 Starting promoter flow for user ${from}`);
+            promoterState = await handlePromoter(from, text, promoterState, supabase, user);
           }
           break;
 
@@ -400,7 +419,7 @@ database.testConnection()
 app.listen(PORT, () => {
   console.log(`🚀 Enhanced Produkt Bot server running on port ${PORT}`);
   console.log(`✅ Server started at ${new Date().toISOString()}`);
-  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging, Timezone Support`);
+  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging, Timezone Support, Promoter Tracking`);
   console.log(`📋 Templates loaded: ${templates.list().length}`);
 });
 
