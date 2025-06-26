@@ -2,6 +2,10 @@
 const { sendMessage, sendMessageInstant } = require('../utils');
 const templates = require('../templates/templateLoader');
 const database = require('../scripts/database');
+const fs = require('fs').promises;
+const path = require('path');
+const FormData = require('form-data');
+const fetch = require('node-fetch');
 
 // Define promoter mappings
 const PROMOTER_MAPPINGS = {
@@ -11,6 +15,85 @@ const PROMOTER_MAPPINGS = {
   'Promoter - Dom of Faith': 'DOF',
   'Promoter - The Neighbors': 'Neighbors'
 };
+
+async function uploadMediaToWhatsApp(filePath, filename) {
+  try {
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    
+    if (!accessToken || !phoneNumberId) {
+      throw new Error('WhatsApp credentials not configured');
+    }
+
+    // Create form data
+    const form = new FormData();
+    const fileBuffer = await fs.readFile(filePath);
+    
+    form.append('file', fileBuffer, {
+      filename: filename,
+      contentType: 'text/csv'
+    });
+    form.append('type', 'document');
+    form.append('messaging_product', 'whatsapp');
+
+    // Upload to WhatsApp
+    const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        ...form.getHeaders()
+      },
+      body: form
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Media upload failed: ${result.error?.message || 'Unknown error'}`);
+    }
+
+    return result.id;
+  } catch (error) {
+    console.error('Media upload error:', error);
+    throw error;
+  }
+}
+
+async function sendDocument(to, mediaId, filename, caption = '') {
+  try {
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'document',
+        document: {
+          id: mediaId,
+          filename: filename,
+          caption: caption
+        }
+      })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Document send failed: ${result.error?.message || 'Unknown error'}`);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Document send error:', error);
+    throw error;
+  }
+}
 
 async function handlePromoter(from, text, promoterState, supabase, user) {
   try {
@@ -253,13 +336,41 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       
       const filename = `${selectedEvent.event_id}-${eventDate}-${selectedEvent.event_name.replace(/[^a-zA-Z0-9]/g, '_')}-Bracelets.csv`;
 
-      // Send CSV file as a document (Note: This requires WhatsApp Business API media upload)
-      // For now, send as formatted text since media upload needs additional setup
-      let csvMessage = `📋 *CSV Export: ${filename}*\n\n`;
-      csvMessage += `\`\`\`\n${csvContent}\n\`\`\`\n\n`;
-      csvMessage += `Copy the above data to create your CSV file.`;
-      
-      await sendMessage(from, csvMessage);
+      try {
+        // Create temporary CSV file
+        const tempDir = path.join(__dirname, '..', 'temp');
+        await fs.mkdir(tempDir, { recursive: true });
+        const tempFilePath = path.join(tempDir, filename);
+        
+        // Write CSV to file
+        await fs.writeFile(tempFilePath, csvContent, 'utf8');
+        console.log(`📁 Created CSV file: ${tempFilePath}`);
+
+        // Upload to WhatsApp and send as document
+        console.log('📤 Uploading CSV to WhatsApp...');
+        const mediaId = await uploadMediaToWhatsApp(tempFilePath, filename);
+        console.log(`✅ Media uploaded successfully: ${mediaId}`);
+
+        const caption = `📋 Promoter ticket list for ${selectedEvent.event_name}\n\n${foundPromotersList.map(p => `• ${p}: ${csvData.filter(row => row[1] === p).length} tickets`).join('\n')}\n\nTotal: ${csvData.length} tickets`;
+        
+        await sendDocument(from, mediaId, filename, caption);
+        console.log('✅ CSV file sent successfully');
+
+        // Clean up temporary file
+        await fs.unlink(tempFilePath);
+        console.log('🗑️ Temporary file cleaned up');
+
+      } catch (fileError) {
+        console.error('Error creating/sending CSV file:', fileError);
+        
+        // Fallback to text format if file upload fails
+        let csvMessage = `📋 *CSV Export: ${filename}*\n\n`;
+        csvMessage += `⚠️ File upload failed, sending as text:\n\n`;
+        csvMessage += `\`\`\`\n${csvContent}\n\`\`\`\n\n`;
+        csvMessage += `Copy the above data to create your CSV file.`;
+        
+        await sendMessage(from, csvMessage);
+      }
 
       delete promoterState[from];
       return promoterState;
