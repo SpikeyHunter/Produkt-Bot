@@ -40,7 +40,7 @@ async function uploadMediaToWhatsApp(filePath, filename) {
     formData += `document\r\n`;
     formData += `--${boundary}\r\n`;
     formData += `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`;
-    formData += `Content-Type: text/csv\r\n\r\n`;
+    formData += `Content-Type: text/plain\r\n\r\n`;
     
     const formDataBuffer = Buffer.concat([
       Buffer.from(formData, 'utf8'),
