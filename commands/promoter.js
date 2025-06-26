@@ -45,20 +45,16 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       // Store events for selection
       promoterState[from].events = events;
       
-      // Format event list exactly like sales command
+      // Format event list in compact style
       let eventList = `🎫 *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
       
       events.forEach(event => {
         const eventDate = new Date(event.event_date).toLocaleDateString('en-US', {
-          weekday: 'short',
           month: 'short', 
-          day: 'numeric',
-          year: 'numeric'
+          day: 'numeric'
         });
         
-        eventList += `🎵 *${event.event_name}*\n`;
-        eventList += `📅 ${eventDate}\n`;
-        eventList += `🆔 ID: ${event.event_id}\n\n`;
+        eventList += `${event.event_id} - ${eventDate} - ${event.event_name}\n`;
       });
       
       eventList += `Type *all* to see all upcoming events or *cancel* to exit.`;
@@ -77,24 +73,20 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       }
 
       if (text.toLowerCase() === 'all') {
-        // Show all events again (same as initial display)
+        // Show all events again in compact format
         const events = promoterState[from].events;
         let eventList = `🎫 *All Upcoming Events* (${events.length})\n\n`;
         
         events.forEach(event => {
           const eventDate = new Date(event.event_date).toLocaleDateString('en-US', {
-            weekday: 'short',
             month: 'short',
-            day: 'numeric', 
-            year: 'numeric'
+            day: 'numeric'
           });
           
-          eventList += `🎵 *${event.event_name}*\n`;
-          eventList += `📅 ${eventDate}\n`;
-          eventList += `🆔 ID: ${event.event_id}\n\n`;
+          eventList += `${event.event_id} - ${eventDate} - ${event.event_name}\n`;
         });
         
-        eventList += `Please select an event by typing its ID, Name, or Date, or type *cancel* to exit.`;
+        eventList += `\nPlease select an event by typing its ID, Name, or Date, or type *cancel* to exit.`;
         await sendMessage(from, eventList);
         return promoterState;
       }
@@ -129,6 +121,17 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
         const promoterTemplates = templates.get('promoter');
         await sendMessage(from, promoterTemplates.selectionError);
         return promoterState;
+      }
+
+      // Force refresh order data before querying
+      console.log(`🔄 Syncing latest order data for event ${selectedEvent.event_id}...`);
+      try {
+        const { manageEventSync } = require('../eventManager');
+        await manageEventSync();
+        console.log('✅ Event orders synced successfully before promoter query');
+      } catch (syncError) {
+        console.log('⚠️ Sync failed, proceeding with existing data:', syncError);
+        // Continue anyway - don't let sync failure block the promoter command
       }
 
       // Fetch promoter orders for the selected event
