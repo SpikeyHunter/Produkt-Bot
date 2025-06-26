@@ -126,11 +126,23 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       // Force refresh order data before querying
       console.log(`🔄 Syncing latest order data for event ${selectedEvent.event_id}...`);
       try {
-        const { manageEventSync } = require('../eventManager');
-        await manageEventSync();
+        // Run the ORDER sync script specifically for this event
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+        
+        // Force update the event order timestamp to trigger re-sync
+        await supabase
+          .from('events')
+          .update({ event_order_updated: '2020-01-01 00:00:00' })
+          .eq('event_id', selectedEvent.event_id);
+        
+        // Run the event-orders.js script to sync order data
+        await execPromise('node event-orders.js update');
+        
         console.log('✅ Event orders synced successfully before promoter query');
       } catch (syncError) {
-        console.log('⚠️ Sync failed, proceeding with existing data:', syncError);
+        console.log('⚠️ Order sync failed, proceeding with existing data:', syncError);
         // Continue anyway - don't let sync failure block the promoter command
       }
 
