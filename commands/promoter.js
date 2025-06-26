@@ -9,17 +9,17 @@ const http = require('http');
 
 // Define promoter mappings
 const PROMOTER_MAPPINGS = {
-  'Promoter - Parsa': 'Pars',
+  'Promoter - Parsa': 'Parsa',
   'Promoter - Jam': 'Jam', 
-  'Promoter - Kerwin': 'Kerw',
+  'Promoter - Kerwin': 'Kerwin',
   'Promoter - Dom of Faith': 'DOF',
-  'Promoter - The Neighbors': 'Neigh'
+  'Promoter - The Neighbors': 'Neighbors'
 };
 
 async function uploadMediaToWhatsApp(filePath, filename) {
   try {
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.PHONE_NUMBER_ID;
     
     if (!accessToken || !phoneNumberId) {
       throw new Error('WhatsApp credentials not configured');
@@ -98,8 +98,8 @@ async function uploadMediaToWhatsApp(filePath, filename) {
 
 async function sendDocument(to, mediaId, filename, caption = '') {
   try {
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.PHONE_NUMBER_ID;
 
     const payload = JSON.stringify({
       messaging_product: 'whatsapp',
