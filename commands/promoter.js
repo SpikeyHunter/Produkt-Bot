@@ -178,6 +178,8 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       
       orders.forEach(order => {
         const promoterDisplayName = PROMOTER_MAPPINGS[order.order_sales_item_name];
+        console.log(`Processing order: ${order.order_sales_item_name} -> ${promoterDisplayName}`);
+        
         if (promoterDisplayName && order.order_serials) {
           foundPromoters.add(promoterDisplayName);
           
@@ -189,17 +191,37 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
             try {
               serials = JSON.parse(order.order_serials);
             } catch (e) {
+              console.log('Failed to parse serials as JSON, treating as single serial:', e);
               serials = [order.order_serials];
             }
           }
           
+          console.log(`Found ${serials.length} serials for ${promoterDisplayName}`);
+          
           serials.forEach(serial => {
             csvData.push([serial, promoterDisplayName]);
           });
+        } else {
+          console.log(`No mapping found for: ${order.order_sales_item_name} or no serials`);
         }
       });
 
+      console.log(`Total CSV rows created: ${csvData.length}`);
+      console.log(`Found promoters: ${Array.from(foundPromoters).join(', ')}`);
+
       if (csvData.length === 0) {
+        // Better error message showing what was actually found
+        let debugMessage = `🔍 *Debug Info:*\n\n`;
+        debugMessage += `Found ${orders.length} orders in database:\n`;
+        orders.forEach(order => {
+          debugMessage += `• ${order.order_sales_item_name}\n`;
+        });
+        debugMessage += `\nExpected promoter names:\n`;
+        Object.keys(PROMOTER_MAPPINGS).forEach(name => {
+          debugMessage += `• ${name}\n`;
+        });
+        await sendMessage(from, debugMessage);
+        
         const promoterTemplates = templates.get('promoter');
         await sendMessage(from, promoterTemplates.noPromoterData);
         delete promoterState[from];
@@ -210,8 +232,10 @@ async function handlePromoter(from, text, promoterState, supabase, user) {
       const foundPromotersList = Array.from(foundPromoters).sort();
       let summaryMessage = `🎫 *Promoter Tickets Found:*\n\n`;
       foundPromotersList.forEach(promoter => {
-        summaryMessage += `• ${promoter}\n`;
+        const count = csvData.filter(row => row[1] === promoter).length;
+        summaryMessage += `• ${promoter}: ${count} tickets\n`;
       });
+      summaryMessage += `\nTotal: ${csvData.length} tickets\n`;
       
       await sendMessage(from, summaryMessage);
 
