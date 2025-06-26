@@ -4,16 +4,16 @@ const templates = require('../templates/templateLoader');
 const database = require('../scripts/database');
 const fs = require('fs').promises;
 const path = require('path');
-const FormData = require('form-data');
-const fetch = require('node-fetch');
+const https = require('https');
+const http = require('http');
 
 // Define promoter mappings
 const PROMOTER_MAPPINGS = {
-  'Promoter - Parsa': 'Parsa',
+  'Promoter - Parsa': 'Pars',
   'Promoter - Jam': 'Jam', 
-  'Promoter - Kerwin': 'Kerwin',
+  'Promoter - Kerwin': 'Kerw',
   'Promoter - Dom of Faith': 'DOF',
-  'Promoter - The Neighbors': 'Neighbors'
+  'Promoter - The Neighbors': 'Neigh'
 };
 
 async function uploadMediaToWhatsApp(filePath, filename) {
@@ -25,34 +25,71 @@ async function uploadMediaToWhatsApp(filePath, filename) {
       throw new Error('WhatsApp credentials not configured');
     }
 
-    // Create form data
-    const form = new FormData();
     const fileBuffer = await fs.readFile(filePath);
     
-    form.append('file', fileBuffer, {
-      filename: filename,
-      contentType: 'text/csv'
-    });
-    form.append('type', 'document');
-    form.append('messaging_product', 'whatsapp');
-
-    // Upload to WhatsApp
-    const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/media`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        ...form.getHeaders()
-      },
-      body: form
-    });
-
-    const result = await response.json();
+    // Create multipart form data boundary
+    const boundary = '----formdata-' + Math.random().toString(36);
     
-    if (!response.ok) {
-      throw new Error(`Media upload failed: ${result.error?.message || 'Unknown error'}`);
-    }
+    // Build form data manually
+    let formData = '';
+    formData += `--${boundary}\r\n`;
+    formData += `Content-Disposition: form-data; name="messaging_product"\r\n\r\n`;
+    formData += `whatsapp\r\n`;
+    formData += `--${boundary}\r\n`;
+    formData += `Content-Disposition: form-data; name="type"\r\n\r\n`;
+    formData += `document\r\n`;
+    formData += `--${boundary}\r\n`;
+    formData += `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`;
+    formData += `Content-Type: text/csv\r\n\r\n`;
+    
+    const formDataBuffer = Buffer.concat([
+      Buffer.from(formData, 'utf8'),
+      fileBuffer,
+      Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8')
+    ]);
 
-    return result.id;
+    return new Promise((resolve, reject) => {
+      const postData = formDataBuffer;
+      
+      const options = {
+        hostname: 'graph.facebook.com',
+        port: 443,
+        path: `/v18.0/${phoneNumberId}/media`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': postData.length
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(result.id);
+            } else {
+              reject(new Error(`Media upload failed: ${result.error?.message || 'Unknown error'}`));
+            }
+          } catch (e) {
+            reject(new Error(`Failed to parse response: ${data}`));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      req.write(postData);
+      req.end();
+    });
   } catch (error) {
     console.error('Media upload error:', error);
     throw error;
@@ -64,31 +101,57 @@ async function sendDocument(to, mediaId, filename, caption = '') {
     const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-    const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: to,
-        type: 'document',
-        document: {
-          id: mediaId,
-          filename: filename,
-          caption: caption
-        }
-      })
+    const payload = JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'document',
+      document: {
+        id: mediaId,
+        filename: filename,
+        caption: caption
+      }
     });
 
-    const result = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(`Document send failed: ${result.error?.message || 'Unknown error'}`);
-    }
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'graph.facebook.com',
+        port: 443,
+        path: `/v18.0/${phoneNumberId}/messages`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload)
+        }
+      };
 
-    return result;
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(result);
+            } else {
+              reject(new Error(`Document send failed: ${result.error?.message || 'Unknown error'}`));
+            }
+          } catch (e) {
+            reject(new Error(`Failed to parse response: ${data}`));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      req.write(payload);
+      req.end();
+    });
   } catch (error) {
     console.error('Document send error:', error);
     throw error;
