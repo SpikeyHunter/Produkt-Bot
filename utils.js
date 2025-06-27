@@ -1,6 +1,146 @@
-// utils.js - COMPLETE with all functions and optimizations + role command
+// utils.js - Enhanced with anti-collapse message techniques
 
 const axios = require('axios');
+
+/**
+ * Prevents WhatsApp message collapsing using various techniques
+ * @param {string} text - The message text
+ * @param {string} method - Anti-collapse method ('invisible', 'spaces', 'dots', 'split')
+ * @returns {string} Modified text that resists collapsing
+ */
+function preventMessageCollapse(text, method = 'invisible') {
+  switch (method) {
+    case 'invisible':
+      // Use invisible Unicode characters between sections
+      return text.replace(/\n\n/g, '\n\u200B\n');
+      
+    case 'spaces':
+      // Add invisible spaces to break up long sections
+      return text.replace(/\n\n/g, '\n \n');
+      
+    case 'dots':
+      // Add subtle dots between sections
+      return text.replace(/\n\n/g, '\n·\n');
+      
+    case 'split':
+      // Split into multiple messages if too long
+      return text.length > 1000 ? 'SPLIT_MESSAGE' : text;
+      
+    default:
+      return text;
+  }
+}
+
+/**
+ * Sends a message with anti-collapse techniques
+ * @param {string} to - The recipient's phone number
+ * @param {string} text - The message body to send
+ * @param {number} typingDuration - How long to show typing (milliseconds)
+ * @param {boolean} preventCollapse - Whether to apply anti-collapse techniques
+ */
+async function sendMessage(to, text, typingDuration = null, preventCollapse = true) {
+  const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
+  
+  try {
+    let messageText = text;
+    
+    // Apply anti-collapse techniques
+    if (preventCollapse) {
+      // Method 1: Add invisible characters
+      messageText = preventMessageCollapse(text, 'invisible');
+      
+      // Method 2: If message is very long, consider splitting
+      if (messageText.length > 1500) {
+        return await sendLongMessage(to, text, typingDuration);
+      }
+    }
+    
+    // OPTIMIZED: Reduced delays for better performance
+    if (typingDuration === null) {
+      const baseTime = 200;
+      const words = messageText.split(' ').length;
+      const calculatedTime = Math.min(600, baseTime + (words * 20));
+      typingDuration = calculatedTime;
+    }
+
+    // Simulate typing delay
+    if (typingDuration > 0) {
+      await new Promise(resolve => setTimeout(resolve, typingDuration));
+    }
+    
+    // Send the actual message
+    await axios.post(
+      `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to: to,
+        text: { body: messageText },
+      },
+      {
+        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+      }
+    );
+    
+    console.log(`✅ Message sent to ${to} (after ${typingDuration}ms delay) [Anti-collapse: ${preventCollapse}]`);
+    
+  } catch (error) {
+    console.error('❌ Error sending message:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
+/**
+ * Sends long messages by intelligently splitting them
+ * @param {string} to - The recipient's phone number
+ * @param {string} text - The long message text
+ * @param {number} typingDuration - Base typing duration
+ */
+async function sendLongMessage(to, text, typingDuration = 300) {
+  const lines = text.split('\n');
+  const chunks = [];
+  let currentChunk = '';
+  
+  // Smart splitting - keep sections together
+  for (const line of lines) {
+    if (currentChunk.length + line.length > 1000) {
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+        currentChunk = '';
+      }
+    }
+    currentChunk += line + '\n';
+  }
+  
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  // Send chunks with delays
+  for (let i = 0; i < chunks.length; i++) {
+    await sendMessage(to, chunks[i], typingDuration, false); // Don't apply anti-collapse to chunks
+    
+    // Add delay between chunks (except for last one)
+    if (i < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+  }
+}
+
+/**
+ * Sends a message with custom anti-collapse method
+ * @param {string} to - The recipient's phone number
+ * @param {string} text - The message body to send
+ * @param {string} antiCollapseMethod - Method to prevent collapsing
+ */
+async function sendMessageAntiCollapse(to, text, antiCollapseMethod = 'invisible') {
+  const processedText = preventMessageCollapse(text, antiCollapseMethod);
+  
+  if (processedText === 'SPLIT_MESSAGE') {
+    return await sendLongMessage(to, text);
+  }
+  
+  return await sendMessage(to, processedText, null, false);
+}
 
 /**
  * Calculates Levenshtein distance between two strings
@@ -186,50 +326,6 @@ async function sendTypingIndicator(messageId) {
     console.log(`💬 Typing indicator sent for message ${messageId}`);
   } catch (error) {
     console.log(`⚠️ Typing indicator failed (non-critical): ${error.response?.data?.error?.message || error.message}`);
-  }
-}
-
-/**
- * OPTIMIZED: Sends a WhatsApp message with reduced delay for better performance
- * @param {string} to - The recipient's phone number
- * @param {string} text - The message body to send
- * @param {number} typingDuration - How long to show typing (milliseconds)
- */
-async function sendMessage(to, text, typingDuration = null) {
-  const { WHATSAPP_TOKEN, PHONE_NUMBER_ID } = process.env;
-  
-  try {
-    // OPTIMIZED: Reduced delays for better performance
-    if (typingDuration === null) {
-      const baseTime = 200; // Reduced from 500ms to 200ms
-      const words = text.split(' ').length;
-      const calculatedTime = Math.min(600, baseTime + (words * 20)); // 20ms per word, max 600ms (down from 1200ms)
-      typingDuration = calculatedTime;
-    }
-
-    // Simulate typing delay
-    if (typingDuration > 0) {
-      await new Promise(resolve => setTimeout(resolve, typingDuration));
-    }
-    
-    // Send the actual message
-    await axios.post(
-      `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: to,
-        text: { body: text },
-      },
-      {
-        headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
-      }
-    );
-    
-    console.log(`✅ Message sent to ${to} (after ${typingDuration}ms delay)`);
-    
-  } catch (error) {
-    console.error('❌ Error sending message:', error.response ? error.response.data : error.message);
-    throw error;
   }
 }
 
@@ -486,14 +582,17 @@ function formatPhoneNumber(phoneNumber) {
 }
 
 module.exports = {
-  sendMessage,                     // Main function with auto-delay
-  sendMessageInstant,             // No delay
+  sendMessage,                     // Enhanced with anti-collapse by default
+  sendMessageInstant,             // No delay, no anti-collapse
   sendMessageWithTyping,          // Custom delay duration
+  sendMessageAntiCollapse,        // Explicit anti-collapse method selection
+  sendLongMessage,                // Smart message splitting
   sendMessageWithButtons,         // WhatsApp interactive buttons
   sendMessageWithList,           // WhatsApp list picker
   sendTypingIndicator,            // Official typing indicator
-  markAsReadWithTyping,           // Mark as read + typing ⭐ THIS WAS MISSING
-  logIncomingMessageWithTyping,   // Enhanced logging with typing ⭐ THIS WAS MISSING
+  markAsReadWithTyping,           // Mark as read + typing
+  logIncomingMessageWithTyping,   // Enhanced logging with typing
+  preventMessageCollapse,         // Anti-collapse utility function
   validateEnvironmentVariables,
   parseCommand,                   // Legacy function
   parseCommandWithSuggestions,    // Enhanced parser with suggestions
