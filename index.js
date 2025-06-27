@@ -1,4 +1,4 @@
-// Enhanced index.js with FIXED webhook filtering to prevent random messages
+// Enhanced index.js with FIXED webhook filtering and role management
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -21,6 +21,8 @@ const handleListUsers = require('./commands/listUsers');
 const handleSales = require('./commands/sales');
 const handleTimezone = require('./commands/timezone');
 const handlePromoter = require('./commands/promoter');
+const handleRole = require('./commands/role');
+const handlePassword = require('./commands/password');
 
 // Import new modules
 const rateLimiter = require('./middleware/rateLimiter');
@@ -45,6 +47,7 @@ let confirmationState = {};
 let salesState = {};
 let timezoneState = {};
 let promoterState = {};
+let roleState = {};
 
 // Service clients
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -63,8 +66,8 @@ app.get('/', (req, res) => {
     status: 'healthy',
     message: 'Produkt Bot server is running!',
     timestamp: new Date().toISOString(),
-    version: '2.1.1',
-    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support', 'webhook_filtering', 'promoter_tracking']
+    version: '2.2.0',
+    features: ['rate_limiting', 'templates', 'enhanced_logging', 'timezone_support', 'webhook_filtering', 'promoter_tracking', 'role_management']
   });
 });
 
@@ -181,6 +184,7 @@ app.post('/webhook', async (req, res) => {
     const isHandlingSales = salesState[from];
     const isChangingTimezone = timezoneState[from];
     const isHandlingPromoter = promoterState[from];
+    const isHandlingRole = roleState[from];
 
     // Handle ongoing flows FIRST
     if (isRegistering) {
@@ -205,6 +209,11 @@ app.post('/webhook', async (req, res) => {
 
     if (isHandlingPromoter) {
       promoterState = await handlePromoter(from, text, promoterState, supabase, user);
+      return res.sendStatus(200);
+    }
+
+    if (isHandlingRole) {
+      roleState = await handleRole(from, text, roleState, supabase, user);
       return res.sendStatus(200);
     }
     
@@ -296,6 +305,27 @@ app.post('/webhook', async (req, res) => {
           }
           break;
 
+        case 'role':
+          // Only allow if user is registered
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            console.log(`🎭 Starting role flow for user ${from}`);
+            roleState = await handleRole(from, text, roleState, supabase, user);
+          }
+          break;
+
+        case 'password':
+          // Only allow if user is registered and admin
+          if (!user) {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else {
+            await handlePassword(from, user);
+          }
+          break;
+
         default:
           if (user) {
             const generalTemplates = templates.get('general', { 
@@ -342,7 +372,7 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// Enhanced stats endpoint
+// Enhanced stats endpoint with role information
 app.get('/api/stats', async (req, res) => {
   try {
     const [dbStats, rateLimitStats] = await Promise.all([
@@ -355,12 +385,25 @@ app.get('/api/stats', async (req, res) => {
     }
 
     const users = dbStats.users || [];
+    
+    // Count secondary roles
+    const roleStats = {};
+    users.forEach(user => {
+      if (user.bot_secondary_roles) {
+        const roles = user.bot_secondary_roles.split(',');
+        roles.forEach(role => {
+          roleStats[role] = (roleStats[role] || 0) + 1;
+        });
+      }
+    });
+
     const summary = {
       users: {
         total: users.length,
         admins: users.filter(u => u.bot_userrole === 'ADMIN').length,
         regular: users.filter(u => u.bot_userrole === 'USER').length
       },
+      secondaryRoles: roleStats,
       timezones: {
         montreal: users.filter(u => u.bot_user_timezone === 'America/New_York').length,
         la: users.filter(u => u.bot_user_timezone === 'America/Los_Angeles').length,
@@ -419,7 +462,7 @@ database.testConnection()
 app.listen(PORT, () => {
   console.log(`🚀 Enhanced Produkt Bot server running on port ${PORT}`);
   console.log(`✅ Server started at ${new Date().toISOString()}`);
-  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging, Timezone Support, Promoter Tracking`);
+  console.log(`📊 Features: Rate Limiting, Templates, Enhanced Logging, Timezone Support, Promoter Tracking, Role Management`);
   console.log(`📋 Templates loaded: ${templates.list().length}`);
 });
 

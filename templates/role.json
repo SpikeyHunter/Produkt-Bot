@@ -1,0 +1,15 @@
+{
+  "welcome": "🎭 *Role Management*\n\nRequest additional roles to unlock enhanced features:\n\n1️⃣ *NCG Count* - New City Gas analytics\n2️⃣ *OpenTable* - Restaurant management\n3️⃣ *Manager Sales* - Financial sales data\n\nSelect a role by typing the number or name, or type *cancel* to exit.",
+  
+  "askPassword": "🔐 *{{roleName}} Access*\n\n{{roleDescription}}\n\nPlease enter the password for this role, or type *cancel* to go back.",
+  
+  "wrongPassword": "❌ *Incorrect Password*\n\nThe password you entered is not correct. Please try again or type *cancel* to exit.",
+  
+  "invalidSelection": "❌ *Invalid Selection*\n\nPlease select a valid role:\n\n1️⃣ NCG Count\n2️⃣ OpenTable  \n3️⃣ Manager Sales\n\nOr type *cancel* to exit.",
+  
+  "roleGranted": "✅ *Role Granted Successfully!*\n\n🎭 *{{roleName}}*\n{{roleDescription}}\n\n*Permissions:* {{permissions}}\n\nYou can now access enhanced features! Type *help* to see your updated commands.",
+  
+  "alreadyHasRole": "ℹ️ *Role Already Assigned*\n\nYou already have the {{roleName}} role and its associated permissions.",
+  
+  "canceled": "❌ *Role Request Canceled*\n\nNo changes were made to your account."
+}

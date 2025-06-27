@@ -1,8 +1,27 @@
-// commands/sales.js - Simple Yes/No navigation (no buttons)
+// commands/sales.js - Updated with permission checking for gross/net sales
 const { sendMessage, sendMessageInstant } = require('../utils');
 const { format } = require('date-fns');
 const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
+
+// Permission checking function (inline since we can't import from utils/permissionUtils yet)
+function hasFeaturePermission(user, feature) {
+  if (!user) return false;
+  
+  // Admin override - admins get all permissions
+  if (user.bot_userrole === 'ADMIN') {
+    return true;
+  }
+  
+  // For view_gross_net_sales, check if user has MANAGERSALES role
+  if (feature === 'view_gross_net_sales') {
+    if (!user.bot_secondary_roles) return false;
+    const userSecondaryRoles = user.bot_secondary_roles.split(',');
+    return userSecondaryRoles.includes('MANAGERSALES');
+  }
+  
+  return false;
+}
 
 async function listUpcomingEvents(from, supabase, user, showAll = false) {
     try {
@@ -88,6 +107,9 @@ async function showSalesReport(from, supabase, event, user) {
         return;
     }
 
+    // Check if user has permission to view gross/net sales
+    const canViewFinancials = hasFeaturePermission(user, 'view_gross_net_sales');
+
     // Use user's timezone for date formatting
     const userTimezone = user?.bot_user_timezone || 'America/New_York';
     const eventDate = new Date(event.event_date);
@@ -117,11 +139,19 @@ async function showSalesReport(from, supabase, event, user) {
             report += `   - Coatcheck: ${salesData.sales_total_coatcheck}\n`;
         }
         
-        if (salesData.sales_gross) {
-            report += `\n   - Gross: ${formatCurrency(salesData.sales_gross)}\n`;
-        }
-        if (salesData.sales_net) {
-            report += `   - Net: ${formatCurrency(salesData.sales_net)}\n`;
+        // Only show financial data if user has permission
+        if (canViewFinancials) {
+            if (salesData.sales_gross) {
+                report += `\n   - Gross: ${formatCurrency(salesData.sales_gross)}\n`;
+            }
+            if (salesData.sales_net) {
+                report += `   - Net: ${formatCurrency(salesData.sales_net)}\n`;
+            }
+        } else {
+            // Show placeholder for users without permission
+            if (salesData.sales_gross || salesData.sales_net) {
+                report += `\n   - Financial data: 🔒 *Manager Sales role required*\n`;
+            }
         }
     }
 
@@ -153,6 +183,11 @@ async function showSalesReport(from, supabase, event, user) {
     if (totalSales === 0 && totalComps === 0 && totalFree === 0 && !salesData.sales_gross && !salesData.sales_net && !salesData.sales_total_coatcheck) {
         await sendMessage(from, "📊 *No Sales Data*\n\nThis event doesn't have any sales data recorded yet.");
         return;
+    }
+
+    // Add note about additional permissions if user doesn't have financial access
+    if (!canViewFinancials && (salesData.sales_gross || salesData.sales_net)) {
+        report += `\n💡 *Tip:* Use the *role* command to request Manager Sales access for financial data.`;
     }
 
     // Send the report instantly

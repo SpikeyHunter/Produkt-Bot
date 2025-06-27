@@ -1,6 +1,33 @@
-// commands/status.js - ACTUALLY working with variables
+// commands/status.js - Updated to show secondary roles
 const { sendMessage, formatPhoneNumber } = require('../utils');
 const templates = require('../templates/templateLoader');
+
+function getFormattedUserRoles(user) {
+  if (!user) return 'No roles';
+  
+  let roleList = [];
+  
+  // Add primary role
+  roleList.push(`${user.bot_userrole} (Primary)`);
+  
+  // Add secondary roles
+  if (user.bot_secondary_roles) {
+    const secondaryRoles = user.bot_secondary_roles.split(',').filter(role => role.trim() !== '');
+    
+    const roleNames = {
+      'NCGCOUNT': 'NCG Counter',
+      'OPENTABLE': 'OpenTable Manager',
+      'MANAGERSALES': 'Sales Manager'
+    };
+    
+    secondaryRoles.forEach(roleKey => {
+      const roleName = roleNames[roleKey] || roleKey;
+      roleList.push(roleName);
+    });
+  }
+  
+  return roleList.join(', ');
+}
 
 async function handleStatus(from, user, parameter = '', supabase) {
   if (!user) {
@@ -11,13 +38,18 @@ async function handleStatus(from, user, parameter = '', supabase) {
 
   // If no parameter, show user's own status
   if (!parameter) {
-    const statusTemplates = templates.get('status', {
-      username: user.bot_username,
-      role: user.bot_userrole,
-      phone: formatPhoneNumber(user.bot_userphone)
-    });
+    const formattedRoles = getFormattedUserRoles(user);
     
-    await sendMessage(from, statusTemplates.userStatus);
+    let statusMessage = `📊 *Your Status*\n\n`;
+    statusMessage += `👤 *Name:* ${user.bot_username}\n`;
+    statusMessage += `🏷️ *Primary Role:* ${user.bot_userrole}\n`;
+    statusMessage += `🎭 *All Roles:* ${formattedRoles}\n`;
+    statusMessage += `📱 *Phone:* ${formatPhoneNumber(user.bot_userphone)}\n`;
+    statusMessage += `🌍 *Timezone:* ${user.bot_user_timezone || 'Not set'}\n`;
+    statusMessage += `✅ *Status:* Active\n\n`;
+    statusMessage += `You're all set up and ready to go!`;
+    
+    await sendMessage(from, statusMessage);
     return;
   }
 
@@ -49,13 +81,17 @@ async function handleStatus(from, user, parameter = '', supabase) {
       return;
     }
 
-    const statusTemplates = templates.get('status', {
-      username: targetUser.bot_username,
-      role: targetUser.bot_userrole,
-      phone: formatPhoneNumber(targetUser.bot_userphone)
-    });
+    const formattedRoles = getFormattedUserRoles(targetUser);
+    
+    let statusMessage = `📊 *User Status*\n\n`;
+    statusMessage += `👤 *Name:* ${targetUser.bot_username}\n`;
+    statusMessage += `🏷️ *Primary Role:* ${targetUser.bot_userrole}\n`;
+    statusMessage += `🎭 *All Roles:* ${formattedRoles}\n`;
+    statusMessage += `📱 *Phone:* ${formatPhoneNumber(targetUser.bot_userphone)}\n`;
+    statusMessage += `🌍 *Timezone:* ${targetUser.bot_user_timezone || 'Not set'}\n`;
+    statusMessage += `✅ *Status:* Active`;
 
-    await sendMessage(from, statusTemplates.otherUserStatus);
+    await sendMessage(from, statusMessage);
 
   } catch (error) {
     console.error('Status command error:', error);

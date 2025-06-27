@@ -1,0 +1,51 @@
+{
+  "primaryRoles": {
+    "USER": {
+      "name": "Standard User",
+      "description": "Basic access to standard commands",
+      "commands": ["help", "status", "timezone", "unregister", "sales", "promoter"]
+    },
+    "ADMIN": {
+      "name": "Administrator", 
+      "description": "Full system access and user management",
+      "commands": ["help", "status", "timezone", "unregister", "sales", "promoter", "list", "password"],
+      "adminCommands": ["status <username>", "unregister <username>", "list users"]
+    }
+  },
+  "secondaryRoles": {
+    "NCGCOUNT": {
+      "name": "NCG Counter",
+      "description": "New City Gas counting and analytics access",
+      "permissions": []
+    },
+    "OPENTABLE": {
+      "name": "OpenTable Manager", 
+      "description": "Restaurant reservation and table management",
+      "permissions": []
+    },
+    "MANAGERSALES": {
+      "name": "Sales Manager",
+      "description": "Enhanced sales data access including financial information",
+      "permissions": ["view_gross_net_sales"]
+    }
+  },
+  "commandPermissions": {
+    "help": ["USER", "ADMIN"],
+    "register": ["*"],
+    "status": ["USER", "ADMIN"],
+    "timezone": ["USER", "ADMIN"],
+    "unregister": ["USER", "ADMIN"],
+    "sales": ["USER", "ADMIN"],
+    "promoter": ["USER", "ADMIN"],
+    "list": ["ADMIN"],
+    "password": ["ADMIN"],
+    "role": ["USER", "ADMIN"]
+  },
+  "featurePermissions": {
+    "view_gross_net_sales": {
+      "description": "Can view gross and net sales figures in sales reports",
+      "roles": ["MANAGERSALES"],
+      "adminOverride": true
+    }
+  }
+}
