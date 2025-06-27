@@ -1,7 +1,52 @@
 {
-  "user": "👤 *User Commands*\n\n🔹 *sales* - View event sales figures\n🔹 *promoter* - View promoter ticket data\n🔹 *timezone* - Change your timezone setting\n🔹 *help* - Show this help menu\n🔹 *status* - Check your current status\n🔹 *role* - Request additional roles\n🔹 *unregister* - Remove your registration\n\nNeed more assistance? Just ask!",
+  "user": [
+    "👤 *User Permissions*",
+    "",
+    "Tixr Commands",
+    "🔹 *sales* - View event sales figures",
+    "🔹 *promoter* - View promoter ticket data", 
+    "",
+    "Bot Commands",
+    "🔹 *help* - Show this help menu",
+    "🔹 *status* - Check your current status",
+    "🔹 *role* - Request additional roles",
+    "🔹 *timezone* - Change your timezone setting",    
+    "🔹 *unregister* - Remove your registration",
+    "",
+    "Need more assistance? Just ask!"
+  ],
   
-  "admin": "👨‍💼 *Admin Commands*\n\n🔹 *sales* - View event sales figures\n🔹 *promoter* - View promoter ticket data\n🔹 *timezone* - Change your timezone setting\n🔹 *help* - Show this help menu\n🔹 *status* - Check your current status\n🔹 *status <username>* - Check another user's status\n🔹 *role* - Request additional roles\n🔹 *unregister* - Remove your registration\n🔹 *unregister <username>* - Remove another user\n🔹 *list users* - View all registered users\n🔹 *password* - View role passwords\n\nNeed more assistance? Just ask!",
+  "admin": [
+    "👨‍💼 *Admin Permissions*",
+    "",
+    "Tixr Commands",
+    "🔹 *sales* - View event sales figures",
+    "🔹 *promoter* - View promoter ticket data",
+    "",
+    "Bot Commands",
+    "🔹 *timezone* - Change your timezone setting", 
+    "🔹 *help* - Show this help menu",
+    "🔹 *status* - Check your current status",
+    "🔹 *role* - Request additional roles",
+    "🔹 *unregister* - Remove your registration",    
+    "",
+    "Admin Commands",
+    "🔹 *status <username>* - Check another user's status",
+    "🔹 *list users* - View all registered users",
+    "🔹 *password* - View role passwords",
+    "🔹 *unregister <username>* - Remove another user",
+    "",
+    "Need more assistance? Just ask!"
+  ],
   
-  "unregistered": "🚫 *Access Restricted*\n\nYou're not registered yet to this chatbot.\nThe access is reserved for *Produkt/New City Gas* employees only.\n\nPlease contact *Charles Brousseau* to get your credentials to register for this bot.\n\nWhen you're ready, text me back and I'll gladly help you with the registration process!"
+  "unregistered": [
+    "🚫 *Access Restricted*",
+    "",
+    "You're not registered yet to this chatbot.",
+    "The access is reserved for *Produkt/New City Gas* employees only.",
+    "",
+    "Please contact *Charles Brousseau* to get your credentials to register for this bot.",
+    "",
+    "When you're ready, text me back and I'll gladly help you with the registration process!"
+  ]
 }

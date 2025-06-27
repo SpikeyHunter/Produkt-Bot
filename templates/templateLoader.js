@@ -1,4 +1,4 @@
-// templates/templateLoader.js - Fixed variable replacement
+// templates/templateLoader.js - Fixed variable replacement with array support
 const fs = require('fs');
 const path = require('path');
 
@@ -69,6 +69,9 @@ class TemplateLoader {
       for (const [key, value] of Object.entries(template)) {
         if (typeof value === 'string') {
           result[key] = this.replaceVariables(value, variables);
+        } else if (Array.isArray(value)) {
+          // Handle array format - join with newlines
+          result[key] = value.map(line => this.replaceVariables(line, variables)).join('\n');
         } else {
           result[key] = value;
         }

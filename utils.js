@@ -1,4 +1,4 @@
-// utils.js - COMPLETE with all functions and optimizations
+// utils.js - COMPLETE with all functions and optimizations + role command
 
 const axios = require('axios');
 
@@ -43,8 +43,8 @@ function getEditDistance(a, b) {
  * @returns {object} { suggestion: string, confidence: number, message: string }
  */
 function findClosestCommand(input, user = null) {
-  const baseCommands = ['help', 'register', 'unregister', 'status', 'sales', 'timezone', 'promoter'];
-  const adminCommands = user?.bot_userrole === 'ADMIN' ? ['list users'] : [];
+  const baseCommands = ['help', 'register', 'unregister', 'status', 'sales', 'timezone', 'promoter', 'role'];
+  const adminCommands = user?.bot_userrole === 'ADMIN' ? ['list users', 'password'] : [];
   const allCommands = [...baseCommands, ...adminCommands];
   
   const inputLower = input.toLowerCase().trim();
@@ -110,8 +110,8 @@ function parseCommandWithSuggestions(text, user = null) {
   if (!text) return { command: null, suggestion: null };
   
   const normalizedText = text.toLowerCase().trim();
-  // Updated with timezone and promoter commands
-  const validCommands = ['help', 'register', 'unregister', 'status', 'sales', 'timezone', 'promoter', 'list', 'cancel', 'yes', 'no', 'all', '1', '2', '3'];
+  // Updated with role command
+  const validCommands = ['help', 'register', 'unregister', 'status', 'sales', 'timezone', 'promoter', 'role', 'password', 'list', 'cancel', 'yes', 'no', 'all', '1', '2', '3'];
   
   // Check for multi-word commands first
   if (normalizedText.startsWith('list ')) {
