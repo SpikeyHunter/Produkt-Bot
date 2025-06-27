@@ -185,11 +185,6 @@ async function showSalesReport(from, supabase, event, user) {
         return;
     }
 
-    // Add note about additional permissions if user doesn't have financial access
-    if (!canViewFinancials && (salesData.sales_gross || salesData.sales_net)) {
-        report += `\n💡 *Tip:* Use the *role* command to request Manager Sales access for financial data.`;
-    }
-
     // Send the report instantly
     await sendMessageInstant(from, report);
     
