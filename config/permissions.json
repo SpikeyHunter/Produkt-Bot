@@ -3,7 +3,7 @@
     "USER": {
       "name": "Standard User",
       "description": "Basic access to standard commands",
-      "commands": ["help", "status", "timezone", "unregister", "sales", "promoter"]
+      "commands": ["help", "status", "timezone", "unregister", "sales"]
     },
     "ADMIN": {
       "name": "Administrator", 
@@ -36,7 +36,7 @@
     "timezone": ["USER", "ADMIN"],
     "unregister": ["USER", "ADMIN"],
     "sales": ["USER", "ADMIN"],
-    "promoter": ["USER", "ADMIN"],
+    "promoter": ["ADMIN"],
     "list": ["ADMIN"],
     "password": ["ADMIN"],
     "role": ["USER", "ADMIN"]

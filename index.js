@@ -294,13 +294,16 @@ app.post('/webhook', async (req, res) => {
           }
           break;
 
-        case 'promoter':
-          // Only allow if user is registered
+case 'promoter':
+          // Only allow if user is registered and admin
           if (!user) {
             const generalTemplates = templates.get('general');
             await sendMessage(from, generalTemplates.welcomeUnregistered);
+          } else if (user.bot_userrole !== 'ADMIN') {
+            const generalTemplates = templates.get('general');
+            await sendMessage(from, generalTemplates.accessDenied);
           } else {
-            console.log(`🎫 Starting promoter flow for user ${from}`);
+            console.log(`🎫 Starting promoter flow for admin user ${from}`);
             promoterState = await handlePromoter(from, text, promoterState, supabase, user);
           }
           break;
