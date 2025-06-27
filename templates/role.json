@@ -1,15 +1,31 @@
 {
-  "welcome": "🎭 *Role Management*\n\nRequest additional roles to unlock enhanced features:\n\n1️⃣ *NCG Count* - New City Gas analytics\n2️⃣ *OpenTable* - Restaurant management\n3️⃣ *Manager Sales* - Financial sales data\n\nSelect a role by typing the number or name, or type *cancel* to exit.",
+  "userMenu": "🎭 *Role Management*\n\nWhat would you like to do?\n\n1️⃣ *Add Role* - Request additional roles\n2️⃣ *Remove Role* - Remove your secondary roles\n\nSelect an option by typing the number, or type *cancel* to exit.",
+  
+  "adminMenu": "🎭 *Role Management for {{username}}*\n\nWhat would you like to do?\n\n1️⃣ *Add Role* - Grant additional roles\n2️⃣ *Remove Role* - Remove secondary roles\n\nSelect an option by typing the number, or type *cancel* to exit.",
+  
+  "addWelcome": "🎭 *Add Role*\n\nRequest additional roles to unlock enhanced features:\n\n1️⃣ *NCG Count* - New City Gas analytics\n2️⃣ *OpenTable* - Restaurant management\n3️⃣ *Manager Sales* - Financial sales data\n\nSelect a role by typing the number or name, or type *cancel* to go back.",
   
   "askPassword": "🔐 *{{roleName}} Access*\n\n{{roleDescription}}\n\nPlease enter the password for this role, or type *cancel* to go back.",
   
-  "wrongPassword": "❌ *Incorrect Password*\n\nThe password you entered is not correct. Please try again or type *cancel* to exit.",
+  "wrongPassword": "❌ *Incorrect Password*\n\nThe password you entered is not correct. Please try again or type *cancel* to go back.",
   
-  "invalidSelection": "❌ *Invalid Selection*\n\nPlease select a valid role:\n\n1️⃣ NCG Count\n2️⃣ OpenTable  \n3️⃣ Manager Sales\n\nOr type *cancel* to exit.",
+  "invalidSelection": "❌ *Invalid Selection*\n\nPlease select a valid option from the menu above, or type *cancel* to go back.",
   
-  "roleGranted": "✅ *Role Granted Successfully!*\n\n🎭 *{{roleName}}*\n{{roleDescription}}\n\n*Permissions:* {{permissions}}\n\nYou can now access enhanced features! Type *help* to see your updated commands.",
+  "invalidMainMenu": "❌ *Invalid Selection*\n\nPlease select:\n\n1️⃣ Add Role\n2️⃣ Remove Role\n\nOr type *cancel* to exit.",
+  
+  "roleGranted": "✅ *Role Granted Successfully!*\n\n🎭 *{{roleName}}*\n{{roleDescription}}\n\n*Added to:* {{targetName}}\n*Permissions:* {{permissions}}\n\nType *help* to see updated commands.",
   
   "alreadyHasRole": "ℹ️ *Role Already Assigned*\n\nYou already have the {{roleName}} role and its associated permissions.",
   
-  "canceled": "❌ *Role Request Canceled*\n\nNo changes were made to your account."
+  "noRolesToRemove": "ℹ️ *No Secondary Roles*\n\n{{username}} don't have any secondary roles to remove.\n\nUse option 1 to add roles.",
+  
+  "confirmRemoval": "⚠️ *Confirm Role Removal*\n\nAre you sure you want to remove the *{{roleName}}* role from {{targetName}}?\n\nThis will remove access to all associated features and commands.\n\nType *yes* to confirm or *cancel* to go back.",
+  
+  "invalidConfirmation": "❓ *Please Confirm*\n\nType *yes* to confirm the role removal or *cancel* to go back.",
+  
+  "roleRemoved": "✅ *Role Removed Successfully!*\n\nThe *{{roleName}}* role has been removed from {{targetName}}.\n\nType *help* to see updated available commands.",
+  
+  "userNotFound": "❌ *User Not Found*\n\nNo user found with the name \"{{username}}\".\n\nUse *list users* to see all registered users.",
+  
+  "canceled": "❌ *Role Management Canceled*\n\nNo changes were made to any account."
 }
