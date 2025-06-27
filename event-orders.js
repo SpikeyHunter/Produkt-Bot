@@ -31,9 +31,15 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 // Parse arguments
 const args = process.argv.slice(2);
 const command = args[0];
+const specificEventId = args[1]; // NEW: Support specific event ID
+const forceSync = args.includes('--force'); // NEW: Force sync option
 
 if (command !== 'update') {
-  console.error("Usage: node event-orders.js update");
+  console.error("Usage: node event-orders.js update [eventId] [--force]");
+  console.error("  update          - Update all events that need syncing");
+  console.error("  update 123456   - Update specific event ID");
+  console.error("  update --force  - Force update all events");
+  console.error("  update 123456 --force - Force update specific event");
   process.exit(1);
 }
 
@@ -346,9 +352,9 @@ async function updateEventTimestamp(eventId) {
     .eq("event_id", eventId);
 }
 
-// Process single event
-async function processEvent(eventId) {
-  console.log(`Processing event ${eventId}...`);
+// Process single event - MODIFIED to support force sync
+async function processEvent(eventId, forceSyncFlag = false) {
+  console.log(`Processing event ${eventId}${forceSyncFlag ? ' (FORCED)' : ''}...`);
   
   const { data: event } = await supabase
     .from("events")
@@ -361,11 +367,15 @@ async function processEvent(eventId) {
     return null;
   }
   
-  // Check if processing needed
+  // Check if processing needed - MODIFIED for force sync
   let shouldProcess = false;
   let fromDate = null;
   
-  if (!event.event_order_updated) {
+  if (forceSyncFlag) {
+    console.log(`🔄 Force sync enabled for event ${eventId}`);
+    shouldProcess = true;
+    fromDate = null; // Fetch all orders when forcing
+  } else if (!event.event_order_updated) {
     shouldProcess = true;
   } else {
     const eventDate = new Date(event.event_date);
@@ -435,13 +445,42 @@ async function getEventsToUpdate() {
   return toUpdate;
 }
 
-// Main execution
+// Main execution - MODIFIED to support specific event and force sync
 async function main() {
   const startTime = Date.now();
   
   try {
+    // NEW: Handle specific event ID
+    if (specificEventId && !isNaN(specificEventId)) {
+      console.log(`Processing specific event: ${specificEventId}${forceSync ? ' (FORCED)' : ''}`);
+      
+      const result = await processEvent(parseInt(specificEventId), forceSync);
+      
+      const duration = (Date.now() - startTime) / 1000;
+      console.log(`\nCompleted in ${duration.toFixed(1)}s`);
+      
+      if (result) {
+        console.log(`Event ${specificEventId}: ${result.inserted} inserted, ${result.skipped} skipped`);
+      }
+      
+      return;
+    }
+    
+    // Original logic for all events
     console.log("Finding events that need updating...");
-    const eventIds = await getEventsToUpdate();
+    let eventIds;
+    
+    if (forceSync) {
+      console.log("🔄 Force sync enabled - processing ALL events");
+      const { data: allEvents } = await supabase
+        .from("events")
+        .select("event_id")
+        .order("event_id");
+      eventIds = allEvents ? allEvents.map(e => e.event_id) : [];
+    } else {
+      eventIds = await getEventsToUpdate();
+    }
+    
     console.log(`Found ${eventIds.length} events to update`);
     
     if (eventIds.length === 0) {
@@ -454,7 +493,7 @@ async function main() {
     let processed = 0;
     
     for (const eventId of eventIds) {
-      const result = await processEvent(eventId);
+      const result = await processEvent(eventId, forceSync);
       if (result) {
         totalInserted += result.inserted;
         totalSkipped += result.skipped;
