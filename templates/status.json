@@ -1,9 +1,0 @@
-{
-  "unregistered": "📊 *Your Status*\n\n❌ You are not currently registered.\n\nType *register* to get started!",
-  
-  "userStatus": "📊 *Your Status*\n\n👤 *Name:* {{username}}\n🏷️ *Role:* {{role}}\n📱 *Phone:* {{phone}}\n✅ *Status:* Active\n\nYou're all set up and ready to go!",
-  
-  "otherUserStatus": "📊 *User Status*\n\n👤 *Name:* {{username}}\n🏷️ *Role:* {{role}}\n📱 *Phone:* {{phone}}\n✅ *Status:* Active",
-  
-  "userNotFound": "❌ *User Not Found*\n\nNo user found with the name \"{{username}}\".\n\nUse *list users* to see all registered users."
-}

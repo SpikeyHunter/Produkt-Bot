@@ -1,4 +1,4 @@
-// utils.js - Enhanced with anti-collapse message techniques
+// utils.js - Enhanced with anti-collapse message techniques and command tracking
 
 const axios = require('axios');
 
@@ -140,6 +140,116 @@ async function sendMessageAntiCollapse(to, text, antiCollapseMethod = 'invisible
   }
   
   return await sendMessage(to, processedText, null, false);
+}
+
+/**
+ * Tracks command usage for a user
+ * @param {string} userPhone - User's phone number
+ * @param {string} command - Command that was used
+ * @param {object} supabase - Supabase client
+ * @returns {Promise<boolean>} Success status
+ */
+async function trackCommandUsage(userPhone, command, supabase) {
+  try {
+    // Get current user data
+    const { data: user, error: fetchError } = await supabase
+      .from('bot_users')
+      .select('bot_history, bot_command_use')
+      .eq('bot_userphone', userPhone)
+      .single();
+
+    if (fetchError || !user) {
+      console.error('Error fetching user for command tracking:', fetchError);
+      return false;
+    }
+
+    // Prepare new history entry
+    const newHistoryEntry = {
+      command: command,
+      timestamp: new Date().toISOString(),
+      date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+    };
+
+    // Get current history array (default to empty array if null)
+    const currentHistory = user.bot_history || [];
+    
+    // Add new entry to history
+    const updatedHistory = [...currentHistory, newHistoryEntry];
+    
+    // Keep only last 100 commands to prevent database bloat
+    const trimmedHistory = updatedHistory.slice(-100);
+    
+    // Increment command use counter
+    const newCommandCount = (user.bot_command_use || 0) + 1;
+
+    // Update database
+    const { error: updateError } = await supabase
+      .from('bot_users')
+      .update({
+        bot_history: trimmedHistory,
+        bot_command_use: newCommandCount
+      })
+      .eq('bot_userphone', userPhone);
+
+    if (updateError) {
+      console.error('Error updating command tracking:', updateError);
+      return false;
+    }
+
+    console.log(`📊 Command tracked: ${command} for user ${userPhone} (total: ${newCommandCount})`);
+    return true;
+
+  } catch (error) {
+    console.error('Exception in trackCommandUsage:', error);
+    return false;
+  }
+}
+
+/**
+ * Gets command statistics for a user
+ * @param {string} userPhone - User's phone number  
+ * @param {object} supabase - Supabase client
+ * @returns {Promise<object>} Command statistics
+ */
+async function getCommandStats(userPhone, supabase) {
+  try {
+    const { data: user, error } = await supabase
+      .from('bot_users')
+      .select('bot_history, bot_command_use')
+      .eq('bot_userphone', userPhone)
+      .single();
+
+    if (error || !user) {
+      return { totalCommands: 0, recentCommands: [], lastCommand: null };
+    }
+
+    const history = user.bot_history || [];
+    const totalCommands = user.bot_command_use || 0;
+    
+    // Get recent commands (last 10)
+    const recentCommands = history.slice(-10).reverse();
+    
+    // Get last command
+    const lastCommand = history.length > 0 ? history[history.length - 1] : null;
+    
+    // Count command frequency
+    const commandFrequency = {};
+    history.forEach(entry => {
+      commandFrequency[entry.command] = (commandFrequency[entry.command] || 0) + 1;
+    });
+
+    return {
+      totalCommands,
+      recentCommands,
+      lastCommand,
+      commandFrequency,
+      historyLength: history.length
+    };
+
+  } catch (error) {
+    console.error('Exception in getCommandStats:', error);
+    return { totalCommands: 0, recentCommands: [], lastCommand: null };
+  }
 }
 
 /**
@@ -599,5 +709,7 @@ module.exports = {
   findClosestCommand,             // Command suggestion finder
   logIncomingMessage,
   sanitizeInput,
-  formatPhoneNumber
+  formatPhoneNumber,
+  trackCommandUsage,              // NEW: Command tracking
+  getCommandStats                 // NEW: Command statistics
 };

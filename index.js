@@ -1,4 +1,4 @@
-// Enhanced index.js with FIXED webhook filtering and role management
+// Enhanced index.js with unified command handler and command tracking
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -10,19 +10,26 @@ const {
   parseCommandWithSuggestions,
   logIncomingMessageWithTyping,
   sendMessage,
+  trackCommandUsage,
 } = require("./utils");
 
-// Import command handlers
-const handleRegister = require("./commands/register");
+// Import help handler from existing file
 const handleHelp = require("./commands/help");
-const handleStatus = require("./commands/status");
-const handleUnregister = require("./commands/unregister");
-const handleListUsers = require("./commands/listUsers");
+
+// Import unified command handlers from botbasic
+const {
+  handleRegister,
+  handleStatus,
+  handleUnregister,
+  handleListUsers,
+  handleTimezone,
+  handlePassword
+} = require("./botbasic");
+
+// Import remaining specialized handlers
 const handleSales = require("./commands/sales");
-const handleTimezone = require("./commands/timezone");
 const handlePromoter = require("./commands/promoter");
 const handleRole = require("./commands/role");
-const handlePassword = require("./commands/password");
 
 // Import new modules
 const rateLimiter = require("./middleware/rateLimiter");
@@ -73,8 +80,10 @@ app.get("/", (req, res) => {
     status: "healthy",
     message: "Produkt Bot server is running!",
     timestamp: new Date().toISOString(),
-    version: "2.2.0",
+    version: "2.4.0",
     features: [
+      "unified_commands",
+      "command_tracking",
       "rate_limiting",
       "templates",
       "enhanced_logging",
@@ -101,7 +110,7 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// FIXED: Enhanced webhook handler with proper filtering
+// Enhanced webhook handler with unified commands and command tracking
 app.post("/webhook", async (req, res) => {
   try {
     // STEP 1: Validate webhook structure
@@ -201,7 +210,7 @@ app.post("/webhook", async (req, res) => {
     const command = commandResult.command;
     const suggestion = commandResult.suggestion;
 
-    // FIXED: Check for ongoing flows FIRST - before any command processing
+    // Check for ongoing flows FIRST - before any command processing
     const isRegistering = registrationState[from];
     const isConfirming = confirmationState[from];
     const isHandlingSales = salesState[from];
@@ -232,7 +241,91 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (isHandlingSales) {
-      salesState = await handleSales(from, text, salesState, supabase, user);
+      const result = await handleSales(from, text, salesState, supabase, user);
+      
+      // Check if user switched to another command
+      if (result._commandSwitch) {
+        salesState = { ...result };
+        delete salesState._commandSwitch;
+        
+        // Process the new command immediately
+        const switchData = result._commandSwitch;
+        console.log(`🔄 Processing switched command from sales: ${switchData.command}`);
+        
+        // Track the switched command
+        if (user) {
+          await trackCommandUsage(switchData.from, switchData.command, supabase);
+        }
+        
+        const textParts = switchData.text.toLowerCase().trim().split(" ");
+        const parameter = textParts.slice(1).join(" ");
+        
+        switch (switchData.command) {
+          case "help":
+            await handleHelp(switchData.from, user);
+            break;
+          case "status":
+            await handleStatus(switchData.from, user, parameter, supabase);
+            break;
+          case "timezone":
+            console.log(`🌍 Starting timezone flow for user ${switchData.from}`);
+            timezoneState = await handleTimezone(
+              switchData.from,
+              switchData.text,
+              timezoneState,
+              supabase,
+              user
+            );
+            break;
+          case "role":
+            console.log(`🎭 Starting role management flow for user ${switchData.from}`);
+            roleState = await handleRole(switchData.from, switchData.text, roleState, supabase, user, parameter);
+            break;
+          case "promoter":
+            if (user.bot_userrole === "ADMIN") {
+              console.log(`🎫 Starting promoter flow for admin user ${switchData.from}`);
+              promoterState = await handlePromoter(
+                switchData.from,
+                switchData.text,
+                promoterState,
+                supabase,
+                user
+              );
+            } else {
+              const generalTemplates = templates.get("general");
+              await sendMessage(switchData.from, generalTemplates.accessDenied);
+            }
+            break;
+          case "password":
+            await handlePassword(switchData.from, user);
+            break;
+          case "list":
+            if (textParts[1] === "users" && user?.bot_userrole === "ADMIN") {
+              await handleListUsers(switchData.from, supabase);
+            }
+            break;
+          case "unregister":
+            const targetUsername = user?.bot_userrole === "ADMIN" && parameter ? parameter : "";
+            confirmationState = await handleUnregister(
+              switchData.from,
+              switchData.text,
+              confirmationState,
+              supabase,
+              user,
+              targetUsername
+            );
+            break;
+          default:
+            // Unknown command after switch
+            const generalTemplates = templates.get("general", {
+              username: user.bot_username,
+              text: switchData.text,
+            });
+            await sendMessage(switchData.from, generalTemplates.userGreeting);
+        }
+      } else {
+        salesState = result;
+      }
       return res.sendStatus(200);
     }
 
@@ -270,10 +363,15 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // FIXED: Only process new commands if NOT in any ongoing flow
+    // Process new commands if NOT in any ongoing flow
     if (command) {
       const textParts = text.toLowerCase().trim().split(" ");
       const parameter = textParts.slice(1).join(" ");
+
+      // Track command usage (only for registered users and valid commands)
+      if (user && ['help', 'status', 'unregister', 'list', 'sales', 'timezone', 'promoter', 'role', 'password'].includes(command)) {
+        await trackCommandUsage(from, command, supabase);
+      }
 
       switch (command) {
         case "help":
@@ -281,6 +379,7 @@ app.post("/webhook", async (req, res) => {
           break;
 
         case "register":
+          // Don't track register command since user doesn't exist yet
           registrationState = await handleRegister(
             from,
             text,
@@ -343,13 +442,96 @@ app.post("/webhook", async (req, res) => {
             await sendMessage(from, generalTemplates.welcomeUnregistered);
           } else {
             console.log(`🔍 Starting sales flow for user ${from}`);
-            salesState = await handleSales(
+            const result = await handleSales(
               from,
               text,
               salesState,
               supabase,
               user
             );
+            
+            // Check if user switched to another command
+            if (result._commandSwitch) {
+              salesState = { ...result };
+              delete salesState._commandSwitch;
+              
+              // Process the new command
+              const switchData = result._commandSwitch;
+              console.log(`🔄 Processing switched command: ${switchData.command}`);
+              
+              // Track the switched command
+              await trackCommandUsage(switchData.from, switchData.command, supabase);
+              
+              // Re-run the switch with the new command
+              const textParts = switchData.text.toLowerCase().trim().split(" ");
+              const parameter = textParts.slice(1).join(" ");
+              
+              switch (switchData.command) {
+                case "help":
+                  await handleHelp(switchData.from, user);
+                  break;
+                case "status":
+                  await handleStatus(switchData.from, user, parameter, supabase);
+                  break;
+                case "timezone":
+                  console.log(`🌍 Starting timezone flow for user ${switchData.from}`);
+                  timezoneState = await handleTimezone(
+                    switchData.from,
+                    switchData.text,
+                    timezoneState,
+                    supabase,
+                    user
+                  );
+                  break;
+                case "role":
+                  console.log(`🎭 Starting role management flow for user ${switchData.from}`);
+                  roleState = await handleRole(switchData.from, switchData.text, roleState, supabase, user, parameter);
+                  break;
+                case "promoter":
+                  if (user.bot_userrole === "ADMIN") {
+                    console.log(`🎫 Starting promoter flow for admin user ${switchData.from}`);
+                    promoterState = await handlePromoter(
+                      switchData.from,
+                      switchData.text,
+                      promoterState,
+                      supabase,
+                      user
+                    );
+                  } else {
+                    const generalTemplates = templates.get("general");
+                    await sendMessage(switchData.from, generalTemplates.accessDenied);
+                  }
+                  break;
+                case "password":
+                  await handlePassword(switchData.from, user);
+                  break;
+                case "list":
+                  if (textParts[1] === "users" && user?.bot_userrole === "ADMIN") {
+                    await handleListUsers(switchData.from, supabase);
+                  }
+                  break;
+                case "unregister":
+                  const targetUsername = user?.bot_userrole === "ADMIN" && parameter ? parameter : "";
+                  confirmationState = await handleUnregister(
+                    switchData.from,
+                    switchData.text,
+                    confirmationState,
+                    supabase,
+                    user,
+                    targetUsername
+                  );
+                  break;
+                default:
+                  // Unknown command after switch
+                  const generalTemplates = templates.get("general", {
+                    username: user.bot_username,
+                    text: switchData.text,
+                  });
+                  await sendMessage(switchData.from, generalTemplates.userGreeting);
+              }
+            } else {
+              salesState = result;
+            }
           }
           break;
 
@@ -390,14 +572,14 @@ app.post("/webhook", async (req, res) => {
           }
           break;
 
-        case 'role':
+        case "role":
           // Only allow if user is registered
           if (!user) {
-            const generalTemplates = templates.get('general');
+            const generalTemplates = templates.get("general");
             await sendMessage(from, generalTemplates.welcomeUnregistered);
           } else {
             console.log(`🎭 Starting role management flow for user ${from}`);
-            const parameter = textParts.slice(1).join(' '); // Get username for admin management
+            const parameter = textParts.slice(1).join(" "); // Get username for admin management
             roleState = await handleRole(from, text, roleState, supabase, user, parameter);
           }
           break;
@@ -458,7 +640,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// Enhanced stats endpoint with role information
+// Enhanced stats endpoint with role information and command tracking
 app.get("/api/stats", async (req, res) => {
   try {
     const [dbStats, rateLimitStats] = await Promise.all([
@@ -483,11 +665,27 @@ app.get("/api/stats", async (req, res) => {
       }
     });
 
+    // Calculate command usage statistics
+    const totalCommands = users.reduce((sum, user) => sum + (user.bot_command_use || 0), 0);
+    const avgCommandsPerUser = users.length > 0 ? Math.round(totalCommands / users.length) : 0;
+    const mostActiveUser = users.reduce((max, user) => 
+      (user.bot_command_use || 0) > (max.bot_command_use || 0) ? user : max, 
+      { bot_command_use: 0, bot_username: "None" }
+    );
+
     const summary = {
       users: {
         total: users.length,
         admins: users.filter((u) => u.bot_userrole === "ADMIN").length,
         regular: users.filter((u) => u.bot_userrole === "USER").length,
+      },
+      commands: {
+        total: totalCommands,
+        averagePerUser: avgCommandsPerUser,
+        mostActiveUser: {
+          name: mostActiveUser.bot_username,
+          commands: mostActiveUser.bot_command_use || 0
+        }
       },
       secondaryRoles: roleStats,
       timezones: {
@@ -551,7 +749,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Enhanced Produkt Bot server running on port ${PORT}`);
   console.log(`✅ Server started at ${new Date().toISOString()}`);
   console.log(
-    `📊 Features: Rate Limiting, Templates, Enhanced Logging, Timezone Support, Promoter Tracking, Role Management`
+    `📊 Features: Unified Commands, Command Tracking, Rate Limiting, Templates, Enhanced Logging, Timezone Support, Promoter Tracking, Role Management`
   );
   console.log(`📋 Templates loaded: ${templates.list().length}`);
 });

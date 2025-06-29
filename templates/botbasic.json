@@ -1,0 +1,51 @@
+{
+  "registrationWelcome": "📝 *Registration Process Started!*\n\nI'm here to help you get started. Let's begin your registration process.\n\n✍️ *Step 1 of 3*\nWhat name would you like me to call you?",
+  
+  "registrationStep2": "✅ Nice to meet you, *{{name}}*!\n\n🔐 *Step 2 of 3*\nPlease enter your registration password to complete the setup.",
+  
+  "registrationStep3": "🌍 *Step 3 of 3 - Timezone Selection*\n\nTo show you event times correctly, please choose your timezone:\n\n*1* - Montreal (Eastern Time)\n*2* - Los Angeles (Pacific Time)\n*3* - Other (UTC)\n\nType the number of your choice, or type *cancel* to stop registration.",
+  
+  "registrationSuccess": "🎉 *Registration Complete!*\n\nWelcome aboard, *{{name}}*!\nYou're now registered as a *{{role}}* user.\nYour timezone is set to *{{timezone}}*.\n\nType *help* to explore what you can do!",
+  
+  "registrationWrongPassword": "❌ *Incorrect Password*\n\nThe password you entered is not valid. Please try again, or type *cancel* to stop the registration process.",
+  
+  "registrationInvalidTimezone": "❌ *Invalid Timezone Choice*\n\nPlease enter *1* for Montreal, *2* for Los Angeles, or *3* for Other/UTC.\n\nOr type *cancel* to stop registration.",
+  
+  "registrationFailed": "⚠️ *Registration Failed*\n\nSorry, I couldn't save your registration due to a technical issue. Please try again later or contact support.",
+  
+  "registrationCanceled": "❌ *Registration Canceled*\n\nNo worries! You can start the registration process anytime by typing *register*.",
+
+  "statusUnregistered": "📊 *Your Status*\n\n❌ You are not currently registered.\n\nType *register* to get started!",
+  
+  "statusUserNotFound": "❌ *User Not Found*\n\nNo user found with the name \"{{username}}\".\n\nUse *list users* to see all registered users.",
+
+  "unregisterConfirmSelf": "⚠️ *Confirm Account Deletion*\n\nAre you sure you want to permanently delete your account? This action cannot be undone and will remove all your data.\n\nReply *yes* to confirm or *no* to cancel.",
+  
+  "unregisterConfirmOther": "⚠️ *Confirm User Deletion*\n\nAre you sure you want to permanently delete {{username}}'s account? This action cannot be undone.\n\nReply *yes* to confirm or *no* to cancel.",
+  
+  "unregisterSuccessSelf": "✅ *Account Deleted Successfully*\n\nYour account has been completely removed from our system.\n\nSend *register* anytime to create a new account!",
+  
+  "unregisterSuccessOther": "✅ *User Deleted Successfully*\n\n{{username}}'s account has been completely removed from the system.",
+  
+  "unregisterCanceled": "❌ *Deletion Canceled*\n\nNo worries! The account remains active.\n\nType *help* to see available commands.",
+  
+  "unregisterInvalidResponse": "❓ *Please Confirm*\n\nPlease reply with *yes* to confirm or *no* to cancel.",
+  
+  "unregisterUserNotFound": "❌ *User Not Found*\n\nNo user found with the name \"{{username}}\".\n\nUse *list users* to see all registered users.",
+  
+  "unregisterCannotDeleteAdmin": "❌ *Cannot Delete Admin*\n\nYou cannot delete another admin account for security reasons.\n\nUse *unregister* to delete your own account.",
+
+  "listUsersNoUsers": "📋 *User List*\n\nNo users are currently registered in the system.",
+
+  "timezonePrompt": "🌍 *Change Your Timezone*\n\nYour current timezone is: *{{currentTimezone}}*\n\nPlease choose your new timezone:\n\n*1* - Montreal (Eastern Time)\n*2* - Los Angeles (Pacific Time)\n*3* - Other (UTC)\n\nType the number of your choice, or type *cancel* to keep your current setting.",
+  
+  "timezoneSuccess": "✅ *Timezone Updated!*\n\nYour timezone has been changed from *{{oldTimezone}}* to *{{timezone}}*.\n\nAll event times will now be displayed in your new timezone.",
+  
+  "timezoneUnchanged": "ℹ️ *No Change*\n\nYou've selected *{{timezone}}*, which is already your current timezone setting.\n\nNo changes were made.",
+  
+  "timezoneInvalid": "❌ *Invalid Choice*\n\nPlease enter *1* for Montreal, *2* for Los Angeles, or *3* for Other/UTC.\n\nOr type *cancel* to keep your current timezone.",
+  
+  "timezoneFailed": "⚠️ *Update Failed*\n\nSorry, I couldn't update your timezone due to a technical issue. Please try again later.",
+  
+  "timezoneCanceled": "❌ *Timezone Change Canceled*\n\nYour timezone setting remains unchanged."
+}

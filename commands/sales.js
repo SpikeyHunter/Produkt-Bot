@@ -1,26 +1,67 @@
-// commands/sales.js - Updated with permission checking for gross/net sales
-const { sendMessage, sendMessageInstant } = require('../utils');
+// commands/sales.js - Enhanced with smart event matching and command flow
+const { sendMessage, sendMessageInstant, parseCommandWithSuggestions } = require('../utils');
 const { format } = require('date-fns');
 const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
+const { hasFeaturePermission, formatCurrency } = require('../botbasic');
 
-// Permission checking function (inline since we can't import from utils/permissionUtils yet)
-function hasFeaturePermission(user, feature) {
-  if (!user) return false;
-  
-  // Admin override - admins get all permissions
-  if (user.bot_userrole === 'ADMIN') {
-    return true;
-  }
-  
-  // For view_gross_net_sales, check if user has MANAGERSALES role
-  if (feature === 'view_gross_net_sales') {
-    if (!user.bot_secondary_roles) return false;
-    const userSecondaryRoles = user.bot_secondary_roles.split(',');
-    return userSecondaryRoles.includes('MANAGERSALES');
-  }
-  
-  return false;
+// Helper function to normalize text for matching (removes accents, special chars)
+function normalizeText(text) {
+    return text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove accents
+        .replace(/[^\w\s]/g, '') // Remove special characters
+        .trim();
+}
+
+// Helper function to find matching events with fuzzy logic
+function findMatchingEvents(input, events) {
+    const normalizedInput = normalizeText(input);
+    const matches = [];
+
+    events.forEach(event => {
+        const eventName = event.event_name.split(',')[0];
+        const normalizedEventName = normalizeText(eventName);
+        
+        // Exact match
+        if (normalizedEventName === normalizedInput) {
+            matches.push({ event, score: 100, type: 'exact' });
+            return;
+        }
+        
+        // Event ID match
+        if (event.event_id.toString() === input) {
+            matches.push({ event, score: 100, type: 'id' });
+            return;
+        }
+        
+        // Date match
+        const [year, month, day] = event.event_date.split('-');
+        const eventDate = new Date(year, month - 1, day);
+        const formattedDate = format(eventDate, 'MMMM d').toLowerCase();
+        if (formattedDate === normalizedInput) {
+            matches.push({ event, score: 100, type: 'date' });
+            return;
+        }
+        
+        // Partial match - event name starts with input
+        if (normalizedEventName.startsWith(normalizedInput)) {
+            const score = Math.round((normalizedInput.length / normalizedEventName.length) * 90);
+            matches.push({ event, score, type: 'starts_with' });
+            return;
+        }
+        
+        // Contains match - event name contains input
+        if (normalizedEventName.includes(normalizedInput) && normalizedInput.length >= 2) {
+            const score = Math.round((normalizedInput.length / normalizedEventName.length) * 70);
+            matches.push({ event, score, type: 'contains' });
+            return;
+        }
+    });
+
+    // Sort by score (highest first) and return
+    return matches.sort((a, b) => b.score - a.score);
 }
 
 async function listUpcomingEvents(from, supabase, user, showAll = false) {
@@ -58,13 +99,14 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
             return [];
         }
 
-        // Build message using user's timezone
+        // Build message using correct date parsing (no timezone conversion for event dates)
         let message = `🎟️ *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
         
         events.forEach(event => {
-            const eventDate = new Date(event.event_date);
-            const zonedDate = toZonedTime(eventDate, userTimezone);
-            const formattedDate = format(zonedDate, 'MMMM d');
+            // Parse date as local date (no timezone conversion needed for event dates)
+            const [year, month, day] = event.event_date.split('-');
+            const eventDate = new Date(year, month - 1, day);
+            const formattedDate = format(eventDate, 'MMMM d');
             const eventName = event.event_name.split(',')[0];
             message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
         });
@@ -86,11 +128,6 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
     }
 }
 
-function formatCurrency(amount) {
-    if (!amount || amount === 0) return null;
-    return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
-
 async function showSalesReport(from, supabase, event, user) {
     // Show loading message for sales report (instant)
     await sendMessageInstant(from, "📊 *Loading sales data...*\n\nRetrieving sales information for this event.");
@@ -110,11 +147,10 @@ async function showSalesReport(from, supabase, event, user) {
     // Check if user has permission to view gross/net sales
     const canViewFinancials = hasFeaturePermission(user, 'view_gross_net_sales');
 
-    // Use user's timezone for date formatting
-    const userTimezone = user?.bot_user_timezone || 'America/New_York';
-    const eventDate = new Date(event.event_date);
-    const zonedDate = toZonedTime(eventDate, userTimezone);
-    const formattedDate = format(zonedDate, 'MMMM d, yyyy');
+    // Parse date as local date (no timezone conversion needed for event dates)
+    const [year, month, day] = event.event_date.split('-');
+    const eventDate = new Date(year, month - 1, day);
+    const formattedDate = format(eventDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
 
     // Build comprehensive sales report
@@ -191,8 +227,43 @@ async function showSalesReport(from, supabase, event, user) {
     // 💭 Add a natural pause with typing animation before asking the question
     await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second pause
     
-    // Ask if they want to check another event with typing animation
-    await sendMessage(from, "🔄 *Would you like to check another event?*\n\nType *yes* to see more events or *no* to exit.", 800);
+    // Enhanced continuation prompt
+    await sendMessage(from, "🔄 *What would you like to do next?*\n\nType:\n• *yes* - See all events\n• *no* - Exit sales\n• Event name - Check specific event\n• Any other command", 800);
+}
+
+async function handleEventSelection(from, input, events, supabase, user) {
+    const matches = findMatchingEvents(input, events);
+    
+    if (matches.length === 0) {
+        await sendMessageInstant(from, "❌ *No Events Found*\n\nNo events match \"" + input + "\".\n\nPlease try a different name or type *all* to see all events.");
+        return null;
+    }
+    
+    if (matches.length === 1 || matches[0].score === 100) {
+        // Single exact match or very high confidence
+        const selectedEvent = matches[0].event;
+        console.log(`🎯 User ${from} selected event: ${selectedEvent.event_name} (${matches[0].type} match)`);
+        await showSalesReport(from, supabase, selectedEvent, user);
+        return selectedEvent;
+    }
+    
+    // Multiple matches - show suggestions
+    let suggestionMessage = `🔍 *Multiple events found for "${input}"*\n\nDid you mean:\n\n`;
+    
+    // Show top 5 matches
+    const topMatches = matches.slice(0, 5);
+    topMatches.forEach((match, index) => {
+        const [year, month, day] = match.event.event_date.split('-');
+        const eventDate = new Date(year, month - 1, day);
+        const formattedDate = format(eventDate, 'MMMM d');
+        const eventName = match.event.event_name.split(',')[0];
+        suggestionMessage += `${index + 1}. ${match.event.event_id} - ${formattedDate} - ${eventName}\n`;
+    });
+    
+    suggestionMessage += '\nType the number, full name, or ID of the event you want.';
+    await sendMessageInstant(from, suggestionMessage);
+    
+    return { type: 'suggestions', matches: topMatches };
 }
 
 async function handleSales(from, text, salesState, supabase, user) {
@@ -233,55 +304,108 @@ async function handleSales(from, text, salesState, supabase, user) {
             return salesState;
         }
 
-        // Use user's timezone for date comparison
-        const userTimezone = user?.bot_user_timezone || 'America/New_York';
-
-        // Find the selected event
-        const selectedEvent = state.events.find(
-            e => e.event_id.toString() === input ||
-            e.event_name.toLowerCase().split(',')[0].includes(input) ||
-            format(toZonedTime(new Date(e.event_date), userTimezone), 'MMMM d').toLowerCase() === input
-        );
-
-        if (selectedEvent) {
-            console.log(`🎯 User ${from} selected event: ${selectedEvent.event_name}`);
-            await showSalesReport(from, supabase, selectedEvent, user);
-            
-            // Move to yes/no question step
-            salesState[from] = { 
-                step: 'asking_continue', 
-                events: state.events,
-                lastEvent: selectedEvent 
-            };
-        } else {
-            await sendMessageInstant(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list above.\n\nOr type *cancel* to exit.");
+        // Handle suggestions selection (if user is selecting from previous suggestions)
+        if (state.suggestions && /^[1-5]$/.test(input)) {
+            const suggestionIndex = parseInt(input) - 1;
+            if (suggestionIndex < state.suggestions.length) {
+                const selectedEvent = state.suggestions[suggestionIndex].event;
+                console.log(`🎯 User ${from} selected suggested event: ${selectedEvent.event_name}`);
+                await showSalesReport(from, supabase, selectedEvent, user);
+                
+                // Move to continuation step
+                salesState[from] = { 
+                    step: 'asking_continue', 
+                    events: state.events,
+                    lastEvent: selectedEvent 
+                };
+                return salesState;
+            }
         }
+
+        // Smart event matching
+        const result = await handleEventSelection(from, text.trim(), state.events, supabase, user);
+        
+        if (result === null) {
+            // No match found, stay in same step
+            return salesState;
+        }
+        
+        if (result.type === 'suggestions') {
+            // Multiple matches found, save suggestions
+            salesState[from] = { 
+                step: 'selecting_event', 
+                events: state.events,
+                suggestions: result.matches
+            };
+            return salesState;
+        }
+        
+        // Single event selected successfully
+        salesState[from] = { 
+            step: 'asking_continue', 
+            events: state.events,
+            lastEvent: result 
+        };
     }
     
-    // Handle yes/no response
+    // Handle continuation response
     else if (state.step === 'asking_continue') {
         
         if (input === 'yes' || input === 'y' || input === 'yeah' || input === 'yep' || input === 'sure' || input === 'ok') {
-            // User wants to check another event
-            console.log(`🔄 User ${from} wants to check another event`);
+            // User wants to see all events
+            console.log(`🔄 User ${from} wants to see all events`);
             const events = await listUpcomingEvents(from, supabase, user, true);
             if (events && events.length > 0) {
                 salesState[from] = { step: 'selecting_event', events };
             } else {
                 delete salesState[from];
             }
+            return salesState;
         }
         
-        else if (input === 'no' || input === 'n' || input === 'nope' || input === 'exit' || input === 'cancel' || input === 'done') {
+        if (input === 'no' || input === 'n' || input === 'nope' || input === 'exit' || input === 'cancel' || input === 'done') {
             // User wants to exit
             delete salesState[from];
             await sendMessage(from, "✅ *Thanks for using the sales module!*\n\nType *help* to see other available commands.", 400);
+            return salesState;
         }
         
-        else {
-            // Invalid response - ask again with typing animation
-            await sendMessage(from, "❓ *Please respond with yes or no*\n\nType *yes* to check another event or *no* to exit.", 600);
+        // Check if it's another command
+        const commandResult = parseCommandWithSuggestions(text, user);
+        if (commandResult.command) {
+            // User typed another command, exit sales flow and let main handler process it
+            delete salesState[from];
+            console.log(`🔄 User ${from} switched to command: ${commandResult.command}`);
+            // Return special flag to indicate command switch
+            return { ...salesState, _commandSwitch: { from, command: commandResult.command, text } };
         }
+        
+        // Try to match as event name directly
+        const result = await handleEventSelection(from, text.trim(), state.events, supabase, user);
+        
+        if (result === null) {
+            // No match found, ask again
+            await sendMessage(from, "❓ *Please choose an option*\n\nType:\n• *yes* - See all events\n• *no* - Exit\n• Event name - Check specific event\n• Any command (help, status, etc.)", 600);
+            return salesState;
+        }
+        
+        if (result.type === 'suggestions') {
+            // Multiple matches found, save suggestions and stay in same step
+            salesState[from] = { 
+                step: 'asking_continue', 
+                events: state.events,
+                lastEvent: state.lastEvent,
+                suggestions: result.matches
+            };
+            return salesState;
+        }
+        
+        // Single event selected successfully, stay in continuation step
+        salesState[from] = { 
+            step: 'asking_continue', 
+            events: state.events,
+            lastEvent: result 
+        };
     }
 
     return salesState;
