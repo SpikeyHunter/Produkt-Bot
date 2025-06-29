@@ -1,8 +1,8 @@
 // botbasic.js - Unified command handler for all bot commands with command tracking
-const { sendMessage, sendMessageInstant, formatPhoneNumber, getCommandStats } = require('./utils');
-const templates = require('./templates/templateLoader');
-const database = require('./scripts/database');
-const permissions = require('./config/permissions.json');
+const { sendMessage, sendMessageInstant, formatPhoneNumber, getCommandStats } = require('../utils'); // FIXED: Go up one directory
+const templates = require('../templates/templateLoader'); // FIXED: Go up one directory
+const database = require('../scripts/database'); // FIXED: Go up one directory
+const permissions = require('../config/permissions.json'); // FIXED: Go up one directory
 
 // Permission checking function
 function hasFeaturePermission(user, feature) {

@@ -3,7 +3,7 @@ const { sendMessage, sendMessageInstant, parseCommandWithSuggestions } = require
 const { format } = require('date-fns');
 const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 const templates = require('../templates/templateLoader');
-const { hasFeaturePermission, formatCurrency } = require('../botbasic');
+const { hasFeaturePermission, formatCurrency } = require('./botbasic')
 
 // Helper function to normalize text for matching (removes accents, special chars)
 function normalizeText(text) {
