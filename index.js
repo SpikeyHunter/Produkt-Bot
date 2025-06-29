@@ -24,7 +24,7 @@ const {
   handleListUsers,
   handleTimezone,
   handlePassword
-} = require("./botbasic");
+} = require("./commands/botbasic");
 
 // Import remaining specialized handlers
 const handleSales = require("./commands/sales");
