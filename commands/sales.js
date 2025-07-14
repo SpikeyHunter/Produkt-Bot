@@ -23,6 +23,18 @@ function hasFeaturePermission(user, feature) {
   return false;
 }
 
+// Helper function to safely parse date strings and avoid timezone issues
+function parseEventDate(dateString) {
+    // If the date string is in YYYY-MM-DD format, treat it as a local date
+    // to avoid timezone conversion issues
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = dateString.split('-').map(Number);
+        return new Date(year, month - 1, day); // month is 0-indexed
+    }
+    // Otherwise, parse normally
+    return new Date(dateString);
+}
+
 async function listUpcomingEvents(from, supabase, user, showAll = false) {
     try {
         // Show loading message immediately (no delay)
@@ -62,9 +74,9 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
         let message = `🎟️ *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
         
         events.forEach(event => {
-            const eventDate = new Date(event.event_date);
-            const zonedDate = toZonedTime(eventDate, userTimezone);
-            const formattedDate = format(zonedDate, 'MMMM d');
+            // Use the helper function to parse the date correctly
+            const eventDate = parseEventDate(event.event_date);
+            const formattedDate = format(eventDate, 'MMMM d');
             const eventName = event.event_name.split(',')[0];
             message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
         });
@@ -110,11 +122,9 @@ async function showSalesReport(from, supabase, event, user) {
     // Check if user has permission to view gross/net sales
     const canViewFinancials = hasFeaturePermission(user, 'view_gross_net_sales');
 
-    // Use user's timezone for date formatting
-    const userTimezone = user?.bot_user_timezone || 'America/New_York';
-    const eventDate = new Date(event.event_date);
-    const zonedDate = toZonedTime(eventDate, userTimezone);
-    const formattedDate = format(zonedDate, 'MMMM d, yyyy');
+    // Use the helper function to parse the date correctly, then format it
+    const eventDate = parseEventDate(event.event_date);
+    const formattedDate = format(eventDate, 'MMMM d, yyyy');
     const eventName = event.event_name.split(',')[0];
 
     // Build comprehensive sales report
@@ -233,14 +243,11 @@ async function handleSales(from, text, salesState, supabase, user) {
             return salesState;
         }
 
-        // Use user's timezone for date comparison
-        const userTimezone = user?.bot_user_timezone || 'America/New_York';
-
         // Find the selected event
         const selectedEvent = state.events.find(
             e => e.event_id.toString() === input ||
             e.event_name.toLowerCase().split(',')[0].includes(input) ||
-            format(toZonedTime(new Date(e.event_date), userTimezone), 'MMMM d').toLowerCase() === input
+            format(parseEventDate(e.event_date), 'MMMM d').toLowerCase() === input
         );
 
         if (selectedEvent) {
