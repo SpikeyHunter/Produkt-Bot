@@ -41,30 +41,22 @@ function runScript(command) {
  */
 async function manageEventSync() {
   try {
-    // 1. Check event_updated from the events table
-    const { data, error } = await supabase
+    // Check if we have any events that have NEVER been synced (NULL)
+    const { data: neverSynced } = await supabase
       .from('events')
-      .select('event_updated')
-      .order('event_updated', { ascending: false })
-      .limit(1)
-      .single();
+      .select('event_id')
+      .is('event_order_updated', null)
+      .limit(1);
 
-    if (error && error.code !== 'PGRST116') { // Ignore 'No rows found' error
-        console.error('❌ Supabase error fetching last event_updated:', error);
+    // If there are events that were never synced, force run event-orders
+    if (neverSynced && neverSynced.length > 0) {
+      console.log('🔄 Found events that were never synced. Running event-orders.js...');
+      runScript('node event-orders.js update').catch(err => console.error("Background event-orders.js failed:", err));
+      lastOrderUpdateTime = Date.now();
+      return; // Exit early since we're syncing
     }
 
-    const lastSyncTime = data ? new Date(data.event_updated) : null;
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-
-    // 2. Run event-sync.js if it's been more than 12 hours
-    if (!lastSyncTime || lastSyncTime < twelveHoursAgo) {
-      console.log('⏰ Last sync was more than 12 hours ago or never happened. Running event-sync.js...');
-      runScript('node event-sync.js all').catch(err => console.error("Background event-sync.js failed:", err));
-    } else {
-      console.log('✅ Event sync is up-to-date (less than 12 hours).');
-    }
-
-    // 3. Run event-orders.js update (with 15-minute interval)
+    // Rest of your existing logic...
     const fifteenMinutes = 15 * 60 * 1000;
     if (!lastOrderUpdateTime || (Date.now() - lastOrderUpdateTime > fifteenMinutes)) {
         console.log('🔄 Running event-orders.js update...');
@@ -73,7 +65,6 @@ async function manageEventSync() {
     } else {
         console.log('✅ Event orders recently updated. Skipping.');
     }
-
   } catch (err) {
     console.error('❌ Fatal error in manageEventSync:', err);
   }
