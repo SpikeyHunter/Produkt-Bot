@@ -84,7 +84,6 @@ async function displayEventList(from, events, showAll = false) {
     
     if (!showAll && events.length > 5) {
         message += '\nType *all* to see all upcoming events or *cancel* to exit.';
-        message += '\n\n💡 *Tip: You can type any event name from the full list, even if not shown above.*';
     } else {
         message += '\nType *cancel* to exit.';
     }
