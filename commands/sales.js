@@ -35,11 +35,8 @@ function parseEventDate(dateString) {
     return new Date(dateString);
 }
 
-async function listUpcomingEvents(from, supabase, user, showAll = false) {
+async function getAllUpcomingEvents(supabase, user) {
     try {
-        // Show loading message immediately (no delay)
-        await sendMessageInstant(from, "🔄 *Fetching events...*\n\nPlease wait while I get the latest event information.");
-        
         // Use user's timezone or default to Eastern
         const userTimezone = user?.bot_user_timezone || 'America/New_York';
         
@@ -47,49 +44,75 @@ async function listUpcomingEvents(from, supabase, user, showAll = false) {
         const todayInUserTZ = toZonedTime(today, userTimezone);
         const todayDateString = format(todayInUserTZ, 'yyyy-MM-dd');
 
-        let query = supabase
+        const { data: events, error } = await supabase
             .from('events')
             .select('event_id, event_name, event_date')
             .gte('event_date', todayDateString)
             .order('event_date', { ascending: true });
 
-        if (!showAll) {
-            query = query.limit(5);
-        }
-
-        const { data: events, error } = await query;
-
         if (error) {
             console.error("Error fetching upcoming events:", error);
+            return null;
+        }
+
+        return events || [];
+    } catch (e) {
+        console.error("Exception in getAllUpcomingEvents:", e);
+        return null;
+    }
+}
+
+async function displayEventList(from, events, showAll = false) {
+    if (!events || events.length === 0) {
+        await sendMessage(from, "📅 *No Upcoming Events*\n\nThere are no upcoming events scheduled at this time.");
+        return;
+    }
+
+    // Determine how many events to display
+    const eventsToShow = showAll ? events : events.slice(0, 5);
+    
+    // Build message
+    let message = `🎟️ *Upcoming Events* (showing ${eventsToShow.length} of ${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
+    
+    eventsToShow.forEach(event => {
+        // Use the helper function to parse the date correctly
+        const eventDate = parseEventDate(event.event_date);
+        const formattedDate = format(eventDate, 'MMMM d');
+        const eventName = event.event_name.split(',')[0];
+        message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
+    });
+    
+    if (!showAll && events.length > 5) {
+        message += '\nType *all* to see all upcoming events or *cancel* to exit.';
+        message += '\n\n💡 *Tip: You can type any event name from the full list, even if not shown above.*';
+    } else {
+        message += '\nType *cancel* to exit.';
+    }
+
+    // Send instantly (no artificial delay)
+    await sendMessageInstant(from, message);
+}
+
+async function listUpcomingEvents(from, supabase, user, showAll = false) {
+    try {
+        // Show loading message immediately (no delay)
+        await sendMessageInstant(from, "🔄 *Fetching events...*\n\nPlease wait while I get the latest event information.");
+        
+        // Get ALL events but only display 5 initially
+        const events = await getAllUpcomingEvents(supabase, user);
+
+        if (events === null) {
             await sendMessage(from, "❌ *Database Error*\n\nI couldn't fetch the event list from our database. Please try again in a moment.");
             return null;
         }
 
-        if (!events || events.length === 0) {
+        if (events.length === 0) {
             await sendMessage(from, "📅 *No Upcoming Events*\n\nThere are no upcoming events scheduled at this time.");
             return [];
         }
 
-        // Build message using user's timezone
-        let message = `🎟️ *Upcoming Events* (${events.length})\n\nPlease select an event by typing its ID, Name, or Date:\n\n`;
-        
-        events.forEach(event => {
-            // Use the helper function to parse the date correctly
-            const eventDate = parseEventDate(event.event_date);
-            const formattedDate = format(eventDate, 'MMMM d');
-            const eventName = event.event_name.split(',')[0];
-            message += `${event.event_id} - ${formattedDate} - ${eventName}\n`;
-        });
-        
-        if (!showAll) {
-            message += '\nType *all* to see all upcoming events or *cancel* to exit.';
-        } else {
-            message += '\nType *cancel* to exit.';
-        }
-
-        // Send instantly (no artificial delay)
-        await sendMessageInstant(from, message);
-        return events;
+        await displayEventList(from, events, showAll);
+        return events; // Return ALL events, not just the displayed ones
 
     } catch (e) {
         console.error("Exception in listUpcomingEvents:", e);
@@ -234,16 +257,12 @@ async function handleSales(from, text, salesState, supabase, user) {
         
         if (input === 'all') {
             console.log(`🔍 User ${from} requested all events`);
-            const allEvents = await listUpcomingEvents(from, supabase, user, true);
-            if (allEvents && allEvents.length > 0) {
-                salesState[from] = { step: 'selecting_event', events: allEvents };
-            } else {
-                delete salesState[from];
-            }
+            await displayEventList(from, state.events, true);
+            // Keep the same state since we already have all events loaded
             return salesState;
         }
 
-        // Find the selected event
+        // Find the selected event from ALL events (not just displayed ones)
         const selectedEvent = state.events.find(
             e => e.event_id.toString() === input ||
             e.event_name.toLowerCase().split(',')[0].includes(input) ||
@@ -261,7 +280,7 @@ async function handleSales(from, text, salesState, supabase, user) {
                 lastEvent: selectedEvent 
             };
         } else {
-            await sendMessageInstant(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list above.\n\nOr type *cancel* to exit.");
+            await sendMessageInstant(from, "❌ *Invalid Selection*\n\nPlease type a valid Event ID, Name, or Date from the list.\n\nOr type *cancel* to exit.");
         }
     }
     
@@ -269,14 +288,10 @@ async function handleSales(from, text, salesState, supabase, user) {
     else if (state.step === 'asking_continue') {
         
         if (input === 'yes' || input === 'y' || input === 'yeah' || input === 'yep' || input === 'sure' || input === 'ok') {
-            // User wants to check another event
+            // User wants to check another event - show all events this time
             console.log(`🔄 User ${from} wants to check another event`);
-            const events = await listUpcomingEvents(from, supabase, user, true);
-            if (events && events.length > 0) {
-                salesState[from] = { step: 'selecting_event', events };
-            } else {
-                delete salesState[from];
-            }
+            await displayEventList(from, state.events, true);
+            salesState[from] = { step: 'selecting_event', events: state.events };
         }
         
         else if (input === 'no' || input === 'n' || input === 'nope' || input === 'exit' || input === 'cancel' || input === 'done') {
