@@ -46,7 +46,7 @@ async function manageEventSync(forceSalesSync = false) {
     const now = Date.now();
     const oneHour = 60 * 60 * 1000;
 
-    // SALES/ORDERS SYNC: Run if forced (sales command) or if events never synced
+    // SALES/ORDERS SYNC: Run if forced (sales command) or if events need syncing
     if (forceSalesSync) {
       console.log('🔄 Force running event-orders.js (sales command triggered)...');
       runScript('node event-orders.js update').catch(err => 
@@ -54,15 +54,38 @@ async function manageEventSync(forceSalesSync = false) {
       );
       lastOrderUpdateTime = now;
     } else {
-      // Only check for never-synced orders if not forced
-      const { data: neverSyncedOrders } = await supabase
+      // NEW LOGIC: Check if any events need order updates using proper date logic
+      const { data: allEvents } = await supabase
         .from('events')
-        .select('event_id')
-        .is('event_order_updated', null)
-        .limit(1);
+        .select('event_id, event_date, event_order_updated');
 
-      if (neverSyncedOrders && neverSyncedOrders.length > 0) {
-        console.log('🔄 Found events that were never synced for orders. Running event-orders.js...');
+      let needsOrderSync = false;
+
+      if (allEvents) {
+        for (const event of allEvents) {
+          // If never synced, definitely needs sync
+          if (!event.event_order_updated) {
+            needsOrderSync = true;
+            console.log(`📋 Event ${event.event_id} never synced - needs order sync`);
+            break;
+          } else {
+            // Check if last updated is before event_date + 1 day (same logic as event-orders.js)
+            const eventDate = new Date(event.event_date);
+            const dayAfter = new Date(eventDate);
+            dayAfter.setDate(dayAfter.getDate() + 1);
+            const lastUpdated = new Date(event.event_order_updated);
+            
+            if (lastUpdated < dayAfter) {
+              needsOrderSync = true;
+              console.log(`📋 Event ${event.event_id} last updated ${lastUpdated.toISOString()}, needs sync (event date: ${event.event_date})`);
+              break;
+            }
+          }
+        }
+      }
+
+      if (needsOrderSync) {
+        console.log('🔄 Found events that need order sync. Running event-orders.js...');
         runScript('node event-orders.js update').catch(err => 
           console.error("Background event-orders.js failed:", err)
         );
