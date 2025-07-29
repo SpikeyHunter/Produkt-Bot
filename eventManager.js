@@ -8,6 +8,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // In-memory state to track last run times
 let lastOrderUpdateTime = null;
 let lastEventSyncTime = null;
+let lastStatusUpdateTime = null;
 
 /**
  * Executes a shell command and logs its output.
@@ -34,6 +35,88 @@ function runScript(command) {
       resolve();
     });
   });
+}
+
+/**
+ * Updates event status from LIVE to PAST for events that have finished
+ * An event is considered finished when current date > event_date + 1 day
+ */
+async function updateExpiredEventStatuses() {
+  try {
+    console.log('🔄 Checking for LIVE events that should be marked as PAST...');
+    
+    // Get current date in Montreal timezone
+    const now = new Date();
+    const montrealNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Montreal" }));
+    
+    // Get all LIVE events
+    const { data: liveEvents, error } = await supabase
+      .from('events')
+      .select('event_id, event_name, event_date, event_status')
+      .eq('event_status', 'LIVE');
+    
+    if (error) {
+      console.error('❌ Error fetching LIVE events:', error);
+      return;
+    }
+    
+    if (!liveEvents || liveEvents.length === 0) {
+      console.log('✅ No LIVE events found to check');
+      return;
+    }
+    
+    console.log(`📋 Found ${liveEvents.length} LIVE events to check`);
+    
+    const eventsToUpdate = [];
+    
+    for (const event of liveEvents) {
+      // Parse event date and add 1 day
+      const eventDate = new Date(event.event_date);
+      const eventEndDate = new Date(eventDate);
+      eventEndDate.setDate(eventEndDate.getDate() + 1);
+      
+      // If current Montreal time is past event_date + 1 day, mark as PAST
+      if (montrealNow > eventEndDate) {
+        eventsToUpdate.push({
+          event_id: event.event_id,
+          event_name: event.event_name,
+          event_date: event.event_date
+        });
+        console.log(`📅 Event "${event.event_name}" (${event.event_date}) should be marked as PAST`);
+      }
+    }
+    
+    if (eventsToUpdate.length === 0) {
+      console.log('✅ All LIVE events are still active. No status updates needed.');
+      return;
+    }
+    
+    console.log(`🔄 Updating ${eventsToUpdate.length} events from LIVE to PAST...`);
+    
+    // Update events in batches
+    const eventIds = eventsToUpdate.map(event => event.event_id);
+    const { data, error: updateError } = await supabase
+      .from('events')
+      .update({ 
+        event_status: 'PAST',
+        event_updated: new Date().toISOString()
+      })
+      .in('event_id', eventIds)
+      .select('event_id, event_name, event_status');
+    
+    if (updateError) {
+      console.error('❌ Error updating event statuses:', updateError);
+      return;
+    }
+    
+    console.log(`✅ Successfully updated ${data.length} events to PAST status:`);
+    data.forEach(event => {
+      console.log(`   📅 ${event.event_name} (ID: ${event.event_id}) → ${event.event_status}`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in updateExpiredEventStatuses:', error);
+  }
 }
 
 /**
@@ -122,9 +205,22 @@ async function manageEventSync(forceSalesSync = false) {
       console.log(`✅ Event sync recently updated. Next sync in ~${minutesUntilNextSync} minutes.`);
     }
 
+    // EVENT STATUS UPDATE: Check for expired LIVE events every 30 minutes
+    const thirtyMinutes = 30 * 60 * 1000;
+    if (!lastStatusUpdateTime || (now - lastStatusUpdateTime > thirtyMinutes)) {
+      console.log('🔄 Running status update check for expired LIVE events...');
+      updateExpiredEventStatuses().catch(err => 
+        console.error("Background status update failed:", err)
+      );
+      lastStatusUpdateTime = now;
+    } else {
+      const minutesUntilNextStatusUpdate = Math.ceil((thirtyMinutes - (now - lastStatusUpdateTime)) / (60 * 1000));
+      console.log(`✅ Status update recently checked. Next check in ~${minutesUntilNextStatusUpdate} minutes.`);
+    }
+
   } catch (err) {
     console.error('❌ Fatal error in manageEventSync:', err);
   }
 }
 
-module.exports = { manageEventSync };
+module.exports = { manageEventSync, updateExpiredEventStatuses };
