@@ -46,8 +46,8 @@ async function updateExpiredEventStatuses() {
     console.log('🔄 Checking for LIVE events that should be marked as PAST...');
     
     // Get current date in Montreal timezone
-    const now = new Date();
-    const montrealNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Montreal" }));
+    const currentTime = new Date();
+    const montrealNow = new Date(currentTime.toLocaleString("en-US", { timeZone: "America/Montreal" }));
     
     // Get all LIVE events
     const { data: liveEvents, error } = await supabase
@@ -95,11 +95,32 @@ async function updateExpiredEventStatuses() {
     
     // Update events in batches
     const eventIds = eventsToUpdate.map(event => event.event_id);
+    
+    // Get current time in Montreal timezone with proper formatting
+    const timestampTime = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'America/Montreal',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      fractionalSecondDigits: 3
+    });
+    
+    const montrealTimeString = formatter.format(timestampTime).replace(' ', 'T');
+    
+    // Determine if we're in EDT (-04:00) or EST (-05:00)
+    const isDST = timestampTime.getMonth() > 2 && timestampTime.getMonth() < 11; // Rough DST check
+    const offset = isDST ? '-04:00' : '-05:00';
+    const montrealTimestamp = montrealTimeString + offset;
+    
     const { data, error: updateError } = await supabase
       .from('events')
       .update({ 
         event_status: 'PAST',
-        event_updated: new Date().toISOString()
+        event_updated: montrealTimestamp
       })
       .in('event_id', eventIds)
       .select('event_id, event_name, event_status');
