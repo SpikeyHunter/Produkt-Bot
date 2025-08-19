@@ -28,7 +28,7 @@ const handlePassword = require("./commands/password");
 const rateLimiter = require("./middleware/rateLimiter");
 const templates = require("./templates/templateLoader");
 const database = require("./scripts/database");
-const { manageEventSync } = require("./eventManager");
+// REMOVED: const { manageEventSync } = require("./eventManager");
 
 // Environment validation
 const requiredEnvVars = [
@@ -177,10 +177,10 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Background event sync
-    manageEventSync().catch((err) =>
-      console.error("Event Sync Background Process Failed:", err)
-    );
+    // REMOVED: Background event sync call
+    // manageEventSync().catch((err) =>
+    //   console.error("Event Sync Background Process Failed:", err)
+    // );
 
     // Get user data
     const userResult = await database.getUser(from);
