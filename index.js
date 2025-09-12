@@ -557,6 +557,6 @@ app.listen(PORT, () => {
 });
 
 // Keep-alive for Render.com
-setInterval(() => {
-  console.log(`🔄 Keep-alive ping - ${new Date().toISOString()}`);
-}, 13 * 60 * 1000);
+// setInterval(() => {
+//   console.log(`🔄 Keep-alive ping - ${new Date().toISOString()}`);
+// }, 13 * 60 * 1000);
